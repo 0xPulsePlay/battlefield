@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#070b08;height:100dvh;overflow:hidden;overscroll-behavior:none}
+a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
+*{-webkit-tap-highlight-color:transparent}
+@keyframes bannerIn{0%{opacity:0;transform:scale(1.18);letter-spacing:12px}60%{opacity:1}100%{opacity:1;transform:scale(1);letter-spacing:4px}}
+@keyframes riseIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseGold{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes blinkDot{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+<div data-screen-label="Battlefield" style="position:fixed; inset:0; overflow:hidden; background:#070b08; font-family:'IBM Plex Mono',ui-monospace,monospace; color:#e2e7dc; font-variant-numeric:tabular-nums;">
+  <canvas ref="{{ canvasRef }}" style="position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; display:block;"></canvas>
+
+  <!-- ====== PORTRAIT / MOBILE HUD ====== -->
+  <sc-if value="{{ isPortraitUI }}" hint-placeholder-val="{{ true }}">
+    <div style="position:absolute; top:0; left:0; right:0; padding: calc(env(safe-area-inset-top) + 10px) 16px 0; text-align:center; pointer-events:none; z-index:20;">
+      <div style="font-size:9px; font-weight:500; letter-spacing:3.5px; color:rgba(210,220,205,.48);">WORLD CUP · SEMIFINAL · REPLAY</div>
+      <div style="margin-top:7px; font-size:22px; font-weight:600; letter-spacing:2px; color:#f0f3ec;">{{ scoreText }}</div>
+      <div style="margin-top:3px; font-size:11px; font-weight:500; letter-spacing:1.5px; color:rgba(210,220,205,.55);">{{ clockText }}</div>
+      <div style="margin:10px auto 0; max-width:340px;">
+        <div style="display:flex; height:26px; border-radius:6px; overflow:hidden; border:1px solid rgba(200,210,190,.28); box-shadow:0 3px 16px rgba(0,0,0,.5);">
+          <div style="width: {{ barEng }}; min-width:30px; background:linear-gradient(180deg,#f2f4f7,#d6dbe4); display:flex; align-items:center; padding-left:7px; overflow:hidden; transition:width .5s cubic-bezier(.3,.8,.3,1);">
+            <span style="font-size:9.5px; font-weight:700; letter-spacing:.5px; color:#1c2740; white-space:nowrap;">{{ barEngLbl }}</span>
+          </div>
+          <div style="width: {{ barDraw }}; min-width:26px; background:rgba(16,22,16,.85); display:flex; align-items:center; justify-content:center; overflow:hidden; transition:width .5s cubic-bezier(.3,.8,.3,1);">
+            <span style="font-size:9.5px; font-weight:600; letter-spacing:.5px; color:rgba(210,218,204,.85); white-space:nowrap;">{{ barDrawLbl }}</span>
+          </div>
+          <div style="width: {{ barArg }}; min-width:30px; background:linear-gradient(180deg,#9ccbf0,#71aeda); display:flex; align-items:center; justify-content:flex-end; padding-right:7px; overflow:hidden; transition:width .5s cubic-bezier(.3,.8,.3,1);">
+            <span style="font-size:9.5px; font-weight:700; letter-spacing:.5px; color:#0e2233; white-space:nowrap;">{{ barArgLbl }}</span>
+          </div>
+        </div>
+      </div>
+      <sc-if value="{{ suspended }}" hint-placeholder-val="{{ false }}">
+        <div style="display:inline-block; margin-top:8px; font-size:10px; font-weight:600; letter-spacing:1px; color:#d3ab48; border:1px solid rgba(211,171,72,.5); background:rgba(8,12,8,.6); padding:4px 10px; border-radius:4px; animation:pulseGold 1.1s infinite;">MARKET REPRICING… {{ suspendSecs }}S</div>
+      </sc-if>
+      <sc-if value="{{ threatShow }}" hint-placeholder-val="{{ false }}">
+        <div style="display:inline-block; margin-top:6px; font-size:10px; font-weight:600; letter-spacing:2px; color:#0d0b05; background:#d3ab48; padding:5px 12px; border-radius:3px; animation:pulseGold 1s infinite;">{{ threatText }}</div>
+      </sc-if>
+    </div>
+
+    <div style="position:absolute; left:12px; top: calc(env(safe-area-inset-top) + 176px); display:flex; align-items:center; gap:6px; pointer-events:none; z-index:15;">
+      <div style="font-size:10px; font-weight:600; letter-spacing:1.5px; color:#0e1420; background:rgba(140,186,223,.92); padding:5px 9px; border-radius:3px;">{{ chipArg }}</div>
+      <sc-if value="{{ tenMenAway }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; font-weight:600; letter-spacing:1px; color:#f2dcdc; background:rgba(168,43,43,.9); padding:4px 7px; border-radius:3px;">10 MEN</div></sc-if>
+    </div>
+    <div style="position:absolute; left:12px; bottom: calc(env(safe-area-inset-bottom) + 122px); display:flex; align-items:center; gap:6px; pointer-events:none; z-index:15;">
+      <div style="font-size:10px; font-weight:600; letter-spacing:1.5px; color:#151b26; background:rgba(232,235,240,.94); padding:5px 9px; border-radius:3px; border-left:3px solid #c03a4e;">{{ chipEng }}</div>
+      <sc-if value="{{ tenMenHome }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; font-weight:600; letter-spacing:1px; color:#f2dcdc; background:rgba(168,43,43,.9); padding:4px 7px; border-radius:3px;">10 MEN</div></sc-if>
+    </div>
+
+    <!-- WAR FEED / STATS bottom sheet -->
+    <div style="position:fixed; left:0; right:0; bottom:0; height:58dvh; z-index:30; pointer-events:none;">
+      <div style="height:100%; pointer-events:auto; transform: translateY({{ sheetShift }}); transition: transform .4s cubic-bezier(.25,.9,.3,1); background:rgba(8,12,9,.9); border-top:1px solid rgba(200,210,190,.16); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-radius:14px 14px 0 0; display:flex; flex-direction:column;">
+        <div onPointerDown="{{ onSheetDown }}" onPointerUp="{{ onSheetUp }}" style="flex:none; padding:8px 12px 6px; cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none;">
+          <div style="width:36px; height:4px; border-radius:2px; background:rgba(210,220,205,.25); margin:0 auto 7px;"></div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="width:6px; height:6px; border-radius:50%; background:#d3ab48; animation:blinkDot 1.6s infinite;"></span>
+            <button onClick="{{ onTabFeed }}" style="min-height:44px; padding:0 6px; background:none; border:none; cursor:pointer; font-family:inherit; font-size:11px; font-weight:600; letter-spacing:3px; color: {{ tabFeedColor }};">WAR FEED</button>
+            <button onClick="{{ onTabStats }}" style="min-height:44px; padding:0 6px; background:none; border:none; cursor:pointer; font-family:inherit; font-size:11px; font-weight:600; letter-spacing:3px; color: {{ tabStatsColor }};">STATS</button>
+            <div style="flex:1;"></div>
+            <button onClick="{{ onTogglePlay }}" style="width:48px; height:44px; font-family:inherit; font-size:13px; border:1px solid rgba(200,210,190,.22); background:rgba(255,255,255,.05); color:#e2e7dc; border-radius:8px; cursor:pointer;">{{ playLabel }}</button>
+            <button onClick="{{ onCycleSpeed }}" style="width:48px; height:44px; font-family:inherit; font-size:13px; font-weight:600; border:1px solid rgba(200,210,190,.22); background:rgba(255,255,255,.05); color:#e2e7dc; border-radius:8px; cursor:pointer;">{{ speedLabel }}</button>
+            <button onClick="{{ onToggleSound }}" style="width:48px; height:44px; font-family:inherit; font-size:9px; font-weight:600; letter-spacing:.5px; border:1px solid rgba(200,210,190,.22); background:rgba(255,255,255,.05); color: {{ soundColor }}; border-radius:8px; cursor:pointer;">{{ soundLabel }}</button>
+          </div>
+        </div>
+        <sc-if value="{{ sheetTabFeed }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1; overflow-y:auto; padding: 0 14px calc(env(safe-area-inset-bottom) + 12px); touch-action:pan-y;">
+            <sc-for list="{{ feedRows }}" as="row" hint-placeholder-count="3">
+              <div style="display:flex; align-items:baseline; gap:10px; padding:9px 2px; border-bottom:1px solid rgba(200,210,190,.08); font-size:11px; animation:riseIn .3s both;">
+                <span style="color:rgba(210,220,205,.4); min-width:32px; font-size:10px;">{{ row.min }}</span>
+                <span style="flex:1; line-height:1.5; color: {{ row.color }};">{{ row.text }}</span>
+                <span style="font-size:8px; letter-spacing:1px; color:rgba(210,220,205,.32); white-space:nowrap;">ANCHORED ✓</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ sheetTabStats }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1; overflow-y:auto; padding: 4px 16px calc(env(safe-area-inset-bottom) + 12px); touch-action:pan-y;">
+            <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:600; letter-spacing:2px; padding:4px 2px 8px; color:rgba(226,231,220,.75);">
+              <span style="color:#eef1f5;">ENGLAND</span><span style="color:#8fc4ec;">ARGENTINA</span>
+            </div>
+            <sc-for list="{{ statRows }}" as="st" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:46px 1fr 100px 1fr 46px; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid rgba(200,210,190,.08);">
+                <span style="font-size:11px; font-weight:600; color:#eef1f5;">{{ st.hTxt }}</span>
+                <div style="height:5px; border-radius:3px; background:rgba(255,255,255,.07); display:flex; justify-content:flex-end; overflow:hidden;"><div style="width: {{ st.hw }}; background:#e8ecf2; border-radius:3px; transition:width .5s;"></div></div>
+                <span style="font-size:9px; font-weight:600; letter-spacing:1.5px; text-align:center; color:rgba(210,220,205,.55);">{{ st.label }}</span>
+                <div style="height:5px; border-radius:3px; background:rgba(255,255,255,.07); overflow:hidden;"><div style="width: {{ st.aw }}; background:#8fc4ec; border-radius:3px; transition:width .5s;"></div></div>
+                <span style="font-size:11px; font-weight:600; text-align:right; color:#8fc4ec;">{{ st.aTxt }}</span>
+              </div>
+            </sc-for>
+            <div style="padding-top:8px; font-size:8.5px; letter-spacing:1px; color:rgba(210,220,205,.35);">TRACKED LIVE FROM THE EVENT FEED · POSSESSION & DANGER FROM POSSESSION STATES</div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <sc-if value="{{ landscapeHint }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:60; font-size:10px; letter-spacing:2px; color:#0d0b05; background:#d3ab48; padding:6px 12px; border-radius:4px;">BEST IN PORTRAIT — ROTATE YOUR PHONE</div>
+    </sc-if>
+  </sc-if>
+
+  <!-- ====== DESKTOP COMMAND CONSOLE ====== -->
+  <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; top:14px; left:18px; z-index:20; pointer-events:none; font-size:11px; letter-spacing:1.5px; color:rgba(210,220,205,.55); line-height:1.9;">
+      <div>{{ utcText }}</div>
+      <div style="color:#e8ecdf;">{{ clockText }}</div>
+    </div>
+    <div style="position:absolute; top:12px; left:0; right:0; text-align:center; z-index:20; pointer-events:none;">
+      <div style="font-size:9px; font-weight:500; letter-spacing:4px; color:rgba(210,220,205,.48);">WORLD CUP · SEMIFINAL · REPLAY</div>
+      <div style="margin-top:6px; font-size:26px; font-weight:600; letter-spacing:3px; color:#f0f3ec;">{{ scoreText }}</div>
+      <div style="margin:8px auto 0; width:430px;">
+        <div style="display:flex; height:26px; border-radius:6px; overflow:hidden; border:1px solid rgba(200,210,190,.28); box-shadow:0 3px 16px rgba(0,0,0,.5);">
+          <div style="width: {{ barEng }}; min-width:34px; background:linear-gradient(180deg,#f2f4f7,#d6dbe4); display:flex; align-items:center; padding-left:8px; overflow:hidden; transition:width .5s cubic-bezier(.3,.8,.3,1);">
+            <span style="font-size:10px; font-weight:700; letter-spacing:.5px; color:#1c2740; white-space:nowrap;">{{ barEngLbl }}</span>
+          </div>
+          <div style="width: {{ barDraw }}; min-width:30px; background:rgba(16,22,16,.85); display:flex; align-items:center; justify-content:center; overflow:hidden; transition:width .5s cubic-bezier(.3,.8,.3,1);">
+            <span style="font-size:10px; font-weight:600; letter-spacing:.5px; color:rgba(210,218,204,.85); white-space:nowrap;">{{ barDrawLbl }}</span>
+          </div>
+          <div style="width: {{ barArg }}; min-width:34px; background:linear-gradient(180deg,#9ccbf0,#71aeda); display:flex; align-items:center; justify-content:flex-end; padding-right:8px; overflow:hidden; transition:width .5s cubic-bezier(.3,.8,.3,1);">
+            <span style="font-size:10px; font-weight:700; letter-spacing:.5px; color:#0e2233; white-space:nowrap;">{{ barArgLbl }}</span>
+          </div>
+        </div>
+      </div>
+      <sc-if value="{{ suspended }}" hint-placeholder-val="{{ false }}">
+        <div style="display:inline-block; margin-top:8px; font-size:10px; font-weight:600; letter-spacing:1px; color:#d3ab48; border:1px solid rgba(211,171,72,.5); background:rgba(8,12,8,.6); padding:4px 10px; border-radius:4px; animation:pulseGold 1.1s infinite;">MARKET REPRICING… {{ suspendSecs }}S</div>
+      </sc-if>
+      <sc-if value="{{ threatShow }}" hint-placeholder-val="{{ false }}">
+        <div style="display:inline-block; margin:6px 0 0 8px; font-size:10px; font-weight:600; letter-spacing:2px; color:#0d0b05; background:#d3ab48; padding:5px 12px; border-radius:3px; animation:pulseGold 1s infinite;">{{ threatText }}</div>
+      </sc-if>
+    </div>
+    <div style="position:absolute; top:64px; left:22px; z-index:20; pointer-events:none; border-left:3px solid #c03a4e; padding-left:12px;">
+      <div style="font-size:11px; font-weight:600; letter-spacing:3px; color:rgba(232,235,240,.85);">ENGLAND</div>
+      <div style="font-size:34px; font-weight:700; color:#f4f6f0;">{{ chipEngPct }}</div>
+      <sc-if value="{{ tenMenHome }}" hint-placeholder-val="{{ false }}"><div style="display:inline-block; font-size:9px; font-weight:600; letter-spacing:1px; color:#f2dcdc; background:rgba(168,43,43,.9); padding:4px 7px; border-radius:3px;">10 MEN</div></sc-if>
+    </div>
+    <div style="position:absolute; top:64px; right:22px; z-index:20; pointer-events:none; text-align:right; border-right:3px solid #d9b02a; padding-right:12px;">
+      <div style="font-size:11px; font-weight:600; letter-spacing:3px; color:rgba(140,186,223,.95);">ARGENTINA</div>
+      <div style="font-size:34px; font-weight:700; color:#f4f6f0;">{{ chipArgPct }}</div>
+      <sc-if value="{{ tenMenAway }}" hint-placeholder-val="{{ false }}"><div style="display:inline-block; font-size:9px; font-weight:600; letter-spacing:1px; color:#f2dcdc; background:rgba(168,43,43,.9); padding:4px 7px; border-radius:3px;">10 MEN</div></sc-if>
+    </div>
+
+    <div style="position:absolute; left:18px; bottom:18px; width:320px; z-index:25; display:flex; flex-direction:column; gap:10px;">
+      <div style="background:rgba(8,12,9,.78); border:1px solid rgba(200,210,190,.14); border-radius:10px; padding:12px 14px; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">
+        <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:600; letter-spacing:2px; margin-bottom:6px;">
+          <span style="color:#eef1f5;">MATCH STATS</span>
+          <span style="color:rgba(210,220,205,.4);">ENG · ARG</span>
+        </div>
+        <sc-for list="{{ statRows }}" as="st" hint-placeholder-count="4">
+          <div style="display:grid; grid-template-columns:40px 1fr 92px 1fr 40px; align-items:center; gap:7px; padding:6px 0; border-bottom:1px solid rgba(200,210,190,.07);">
+            <span style="font-size:10.5px; font-weight:600; color:#eef1f5;">{{ st.hTxt }}</span>
+            <div style="height:4px; border-radius:2px; background:rgba(255,255,255,.07); display:flex; justify-content:flex-end; overflow:hidden;"><div style="width: {{ st.hw }}; background:#e8ecf2; border-radius:2px; transition:width .5s;"></div></div>
+            <span style="font-size:8.5px; font-weight:600; letter-spacing:1.2px; text-align:center; color:rgba(210,220,205,.5);">{{ st.label }}</span>
+            <div style="height:4px; border-radius:2px; background:rgba(255,255,255,.07); overflow:hidden;"><div style="width: {{ st.aw }}; background:#8fc4ec; border-radius:2px; transition:width .5s;"></div></div>
+            <span style="font-size:10.5px; font-weight:600; text-align:right; color:#8fc4ec;">{{ st.aTxt }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:rgba(8,12,9,.78); border:1px solid rgba(200,210,190,.14); border-radius:10px; padding:12px 14px; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">
+        <div style="font-size:10px; font-weight:600; letter-spacing:2.5px; color:rgba(226,231,220,.7); margin-bottom:8px;">PROBABILITY PATH — ENG WIN</div>
+        <canvas ref="{{ sparkRef }}" width="292" height="96" style="width:292px; height:96px; display:block;"></canvas>
+        <div style="font-size:8.5px; letter-spacing:1px; color:rgba(210,220,205,.35); margin-top:6px;">GAPS = MARKET SUSPENDED · NEVER INTERPOLATED</div>
+      </div>
+    </div>
+
+    <div style="position:absolute; right:18px; bottom:18px; width:340px; max-height:38vh; z-index:25; background:rgba(8,12,9,.78); border:1px solid rgba(200,210,190,.14); border-radius:10px; padding:10px 14px; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; gap:8px; padding-bottom:6px;">
+        <span style="width:6px; height:6px; border-radius:50%; background:#d3ab48; animation:blinkDot 1.6s infinite;"></span>
+        <span style="font-size:10px; font-weight:600; letter-spacing:3px; color:#e8ecdf;">WAR FEED</span>
+      </div>
+      <div style="flex:1; overflow-y:auto; min-height:120px;">
+        <sc-for list="{{ feedRows }}" as="row" hint-placeholder-count="3">
+          <div style="display:flex; align-items:baseline; gap:10px; padding:8px 2px; border-bottom:1px solid rgba(200,210,190,.08); font-size:11px; animation:riseIn .3s both;">
+            <span style="color:rgba(210,220,205,.4); min-width:32px; font-size:10px;">{{ row.min }}</span>
+            <span style="flex:1; line-height:1.5; color: {{ row.color }};">{{ row.text }}</span>
+            <span style="font-size:8px; letter-spacing:1px; color:rgba(210,220,205,.32); white-space:nowrap;">✓</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:25; display:flex; gap:8px;">
+      <button onClick="{{ onTogglePlay }}" style="width:52px; height:44px; font-family:'IBM Plex Mono',monospace; font-size:13px; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.8); color:#e2e7dc; border-radius:8px; cursor:pointer;">{{ playLabel }}</button>
+      <button onClick="{{ onCycleSpeed }}" style="width:52px; height:44px; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.8); color:#e2e7dc; border-radius:8px; cursor:pointer;">{{ speedLabel }}</button>
+      <button onClick="{{ onToggleSound }}" style="width:52px; height:44px; font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.8); color: {{ soundColor }}; border-radius:8px; cursor:pointer;">{{ soundLabel }}</button>
+    </div>
+  </sc-if>
+
+  <!-- ====== BANNER / REPLAY OVERLAYS ====== -->
+  <sc-if value="{{ bannerShow }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:45;">
+      <div style="position:absolute; inset:0; background:radial-gradient(ellipse 62% 44% at 50% 47%, rgba(3,5,3,.58), rgba(3,5,3,.26) 55%, rgba(0,0,0,0) 76%); animation:fadeIn .3s both;"></div>
+      <div style="position:relative; text-align:center; animation:bannerIn .55s cubic-bezier(.2,.9,.3,1) both; padding:20px 44px 22px; margin:0 20px; background:rgba(7,11,8,.72); border:1px solid rgba(210,220,200,.24); border-radius:12px; backdrop-filter:blur(10px) saturate(1.15); -webkit-backdrop-filter:blur(10px) saturate(1.15); box-shadow:0 18px 60px rgba(0,0,0,.6);">
+        <div style="font-family:'Barlow Condensed',sans-serif; font-size:44px; font-weight:700; letter-spacing:4px; color:#f6f8f1; text-transform:uppercase;">{{ bannerTitle }}</div>
+        <div style="width:64px; height:3px; margin:10px auto; background: {{ bannerAccent }};"></div>
+        <div style="font-size:12px; font-weight:600; letter-spacing:3px; color:rgba(230,235,224,.9);">{{ bannerSub }}</div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ replayShow }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; inset:0; background:#050705; display:flex; align-items:center; justify-content:center; z-index:70; animation:fadeIn .4s both;">
+      <div style="text-align:center;">
+        <div style="font-family:'Barlow Condensed',sans-serif; font-size:52px; font-weight:700; letter-spacing:14px; color:#e8ecdf; padding-left:14px;">REPLAY</div>
+        <div style="margin-top:8px; font-size:10px; letter-spacing:3px; color:rgba(210,220,205,.5);">RESETTING THE BATTLEFIELD</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <x-import component-from-global-scope="WarRoom" from="./tweaks-panel.jsx ./war-room.jsx" hint-size="1px,1px"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  canvasRef = React.createRef();
+  sparkRef = React.createRef();
+  state = {
+    isDesktop: false, landscapeHint: false, sheetOpen: false, sheetTab: 'feed',
+    playing: true, speed: 1, sound: false,
+    clockText: '52:00 · H2', scoreText: 'ENG 0 — 0 ARG',
+    prob: { home: 28.4, draw: 46.5, away: 25.1 }, score: { home: 0, away: 0 },
+    suspended: false, suspendSecs: 0, threatText: null,
+    feed: [], banner: null, replayShow: false,
+    tenMen: { home: false, away: false }, utcText: '',
+  };
+  hist = []; _pmCool = {}; _seq = 0; _anim = null; _susT0 = null; _kicked = false;
+  stats = this._freshStats();
+
+  _freshStats() {
+    return {
+      shots: { home: 0, away: 0 }, sot: { home: 0, away: 0 },
+      corners: { home: 0, away: 0 }, yellow: { home: 0, away: 0 }, red: { home: 0, away: 0 },
+      possMs: { home: 0, away: 0 }, dangerMs: { home: 0, away: 0 },
+    };
+  }
+
+  async componentDidMount() {
+    this._mqD = matchMedia('(min-width: 1024px)');
+    this._mqL = matchMedia('(orientation: landscape) and (max-height: 520px)');
+    this._onMq = () => {
+      const isDesktop = this._mqD.matches;
+      this.setState({ isDesktop, landscapeHint: !isDesktop && this._mqL.matches });
+      this.engine && this.engine.setMode(!isDesktop);
+      this._resize();
+    };
+    this._mqD.addEventListener('change', this._onMq);
+    this._mqL.addEventListener('change', this._onMq);
+    const [{ MatchDriver }, { BattleEngine }] = await Promise.all([import('./driver.js'), import('./engine.js')]);
+    const cv = this.canvasRef.current;
+    this.engine = new BattleEngine(cv, {
+      onBanner: (b) => this._banner(b),
+      onChip: (side) => this.setState(s => ({ tenMen: { ...s.tenMen, [side]: true } })),
+      onSfx: (n, g) => this._sfx(n, g),
+    });
+    this.engine.setMode(!this._mqD.matches);
+    this._resize = () => { const r = cv.getBoundingClientRect(); if (r.width) this.engine.resize(r.width, r.height); };
+    this._ro = new ResizeObserver(this._resize); this._ro.observe(cv);
+    this._resize();
+    this.driver = new MatchDriver({ onFrame: (f) => this._frame(f), onEvent: (e) => this._event(e) });
+    window.BF = {
+      inject: (e) => this.driver.inject(e),
+      threat: (side) => this.driver.forceThreat(side, 8),
+      fog: (on) => this.driver.setFogForced(on),
+      mom: (side, v) => this.driver.setMomentumOverride(side, v),
+      finale: () => this.driver.jumpToFinale(),
+    };
+    this._utcIv = setInterval(() => {
+      const d = new Date(), p = (n) => String(n).padStart(2, '0');
+      this.setState({ utcText: `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} UTC` });
+    }, 1000);
+    this._onMq();
+    this._row('FEED ONLINE · anchored to market ticks', 'dim');
+  }
+  componentWillUnmount() {
+    this.driver && this.driver.destroy(); this.engine && this.engine.destroy();
+    this._ro && this._ro.disconnect(); clearInterval(this._utcIv);
+    this._mqD && this._mqD.removeEventListener('change', this._onMq);
+    this._mqL && this._mqL.removeEventListener('change', this._onMq);
+    if (window.BF) delete window.BF;
+  }
+
+  _clockFmt(c) {
+    const m = Math.floor(c.s / 60), sec = String(c.s % 60).padStart(2, '0');
+    const mm = m > 90 && c.phase !== 'FT' ? `90+${m - 90}` : String(m);
+    return `${mm}:${sec} · ${c.phase}`;
+  }
+  _minute() { return this._lastF ? Math.min(Math.floor(this._lastF.clock.s / 60), 90 + Math.max(0, Math.floor(this._lastF.clock.s / 60) - 90)) + "'" : ''; }
+
+  _frame(f) {
+    this._lastF = f;
+    this.engine && this.engine.setFrame(f);
+    const now = Date.now();
+    // stats integration: possession + danger time (wall-clock share)
+    const dts = this._fT ? Math.min(0.3, (now - this._fT) / 1000) : 0; this._fT = now;
+    if (f.possession.side && !f.market.suspended) {
+      this.stats.possMs[f.possession.side] += dts;
+      if (f.possession.zone === 'danger' || f.possession.zone === 'box') this.stats.dangerMs[f.possession.side] += dts;
+    }
+    this._mom = f.momentum;
+    this.hist.push({ t: now, prob: { ...f.prob }, susp: f.market.suspended });
+    if (this.hist.length > 1400) this.hist.splice(0, 200);
+    // suspension elapsed
+    let suspendSecs = 0;
+    if (f.market.suspended) { if (!this._susT0) this._susT0 = now; suspendSecs = Math.floor((now - this._susT0) / 1000); }
+    else this._susT0 = null;
+    // threat text
+    const T = f.threat; let threatText = null;
+    if (T.home.goal) threatText = '⚠ ENGLAND GOAL THREAT';
+    else if (T.away.goal) threatText = '⚠ ARGENTINA GOAL THREAT';
+    else if (T.home.penalty || T.away.penalty) threatText = '⚠ PENALTY THREAT';
+    else if (T.neutral.var) threatText = '⚠ VAR — TRIBUNAL IN SESSION';
+    else if (T.neutral.redCard) threatText = '⚠ RED CARD REVIEW';
+    else if (T.neutral.yellowCard) threatText = '⚠ CAUTION SHOWN';
+    else if (T.home.corner) threatText = '⚠ ENGLAND CORNER';
+    else if (T.away.corner) threatText = '⚠ ARGENTINA CORNER';
+    // prob-move feed rows (±1.5% inside a minute)
+    if (!f.market.suspended) {
+      const old = this.hist.find(h => now - h.t <= 62000);
+      if (old && now - old.t > 15000) for (const side of ['home', 'away']) {
+        if (now < (this._pmCool[side] || 0)) continue;
+        const d = f.prob[side] - old.prob[side];
+        if (Math.abs(d) >= 1.5) {
+          this._pmCool[side] = now + 30000;
+          const nm = side === 'home' ? 'ENG' : 'ARG';
+          const flavor = d > 0 ? (f.possession.side === side ? 'pressure building' : 'market drift') : 'raid repelled';
+          this._row(`${nm} ${d > 0 ? '+' : ''}${d.toFixed(1)}% · ${flavor}`, side);
+        }
+      }
+    }
+    const st = { clockText: this._clockFmt(f.clock), scoreText: `ENG ${f.score.home} — ${f.score.away} ARG`, score: f.score, suspended: f.market.suspended, suspendSecs, threatText };
+    if (!this._anim) st.prob = f.prob;
+    this.setState(st);
+    if (this.state.isDesktop) this._spark();
+  }
+
+  _event(e) {
+    this.engine && this.engine.event(e);
+    const nm = (s) => s === 'home' ? 'ENGLAND' : 'ARGENTINA';
+    switch (e.kind) {
+      case 'kickoff':
+        if (this._kicked) {
+          this.stats = this._freshStats();
+          this.setState({ replayShow: true, tenMen: { home: false, away: false }, feed: [] });
+          this._pmCool = {}; this.hist = [];
+          setTimeout(() => this.setState({ replayShow: false }), 2400);
+          this._row('KICKOFF · REPLAY LOOP', 'gold');
+        } else { this._kicked = true; this._row('KICKOFF · SECOND HALF, 0–0, ENG 28.4 / DRAW 46.5 / ARG 25.1', 'dim'); }
+        break;
+      case 'goal': this._row(`GOAL — ${nm(e.side)} · ${e.probJump.from.toFixed(1)}% → ${e.probJump.to.toFixed(1)}%`, e.side); break;
+      case 'shot':
+        this.stats.shots[e.side]++;
+        if (e.outcome === 'OnTarget') this.stats.sot[e.side]++;
+        this._row(`SHOT (${e.outcome.toUpperCase()}) — ${nm(e.side)}`, e.side);
+        break;
+      case 'corner': this.stats.corners[e.side]++; this._row(`CORNER — ${nm(e.side)} · flanking maneuver`, e.side); break;
+      case 'card':
+        this.stats[e.color === 'red' ? 'red' : 'yellow'][e.side]++;
+        this._row(`${e.color.toUpperCase()} CARD — ${nm(e.side)}`, 'gold');
+        if (e.color === 'red') this.setState(s => ({ tenMen: { ...s.tenMen, [e.side]: true } }));
+        break;
+      case 'var': this._row('VAR — PENALTY CHECK · CEASEFIRE', 'gold'); break;
+      case 'var_end': this._row(`VAR — ${e.outcome.toUpperCase()}`, 'gold'); break;
+      case 'substitution': this._row(`SUBSTITUTION — ${nm(e.side)} · fresh squad marches in`, e.side); break;
+      case 'additional_time': this._row(`+${e.minutes} MIN — BATTLE EXTENDED`, 'gold'); break;
+      case 'suspension_start': this._row('MARKET SUSPENDED · fog of war rolls in', 'gold'); break;
+      case 'reopen': {
+        this._row(`MARKET REOPENED · ENG ${e.prob.home.toFixed(1)} / DRAW ${e.prob.draw.toFixed(1)} / ARG ${e.prob.away.toFixed(1)}`, 'gold');
+        this._pmCool = { home: Date.now() + 70000, away: Date.now() + 70000 };
+        this._countUp(e.prob);
+        break;
+      }
+      case 'fulltime': {
+        const w = e.winner;
+        this._row(w === 'draw' ? `FULL TIME — ARMISTICE ${e.score.home}–${e.score.away}` : `FULL TIME — ${nm(w)} TAKE THE FIELD (${e.score.home}–${e.score.away})`, w === 'draw' ? 'gold' : w);
+        break;
+      }
+    }
+  }
+
+  _row(text, tone) {
+    const colors = { home: '#dfe6f2', away: '#9cc6e8', gold: '#d3ab48', dim: 'rgba(210,220,205,.55)' };
+    const row = { id: ++this._seq, min: this._lastF ? this._clockFmt(this._lastF.clock).split(' ')[0] : '—', text, color: colors[tone] || '#dfe4d8' };
+    this.setState(s => ({ feed: [row, ...s.feed].slice(0, 42) }));
+  }
+  _banner(b) {
+    clearTimeout(this._bT);
+    this.setState({ banner: b });
+    this._bT = setTimeout(() => this.setState({ banner: null }), b.hold || 2800);
+  }
+  _countUp(to) {
+    const from = { ...this.state.prob }, t0 = performance.now(), dur = 900;
+    this._anim = true;
+    const step = (ts) => {
+      const t = Math.min(1, (ts - t0) / dur), e = 1 - Math.pow(1 - t, 3);
+      this.setState({ prob: { home: from.home + (to.home - from.home) * e, draw: from.draw + (to.draw - from.draw) * e, away: from.away + (to.away - from.away) * e } });
+      if (t < 1) requestAnimationFrame(step); else this._anim = null;
+    };
+    requestAnimationFrame(step);
+  }
+  _spark() {
+    const cv = this.sparkRef.current; if (!cv) return;
+    const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(200,210,190,.1)'; ctx.lineWidth = 1;
+    for (const y of [0.25, 0.5, 0.75]) { ctx.beginPath(); ctx.moveTo(0, H * y); ctx.lineTo(W, H * y); ctx.stroke(); }
+    const now = Date.now(), span = 240000;
+    const draw = (key, col, lw) => {
+      ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath();
+      let pen = false;
+      for (const h of this.hist) {
+        const age = now - h.t; if (age > span) continue;
+        if (h.susp) { pen = false; continue; } // leave the gap — never interpolate
+        const x = W - (age / span) * W, y = H - (h.prob[key] / 100) * H;
+        if (!pen) { ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    };
+    draw('away', 'rgba(140,186,223,.4)', 1);
+    draw('home', '#e8ebf0', 1.6);
+  }
+  _sfx(name, g = 0.5) {
+    if (!this.state.sound) return;
+    const now = performance.now();
+    if (name === 'fire' && now - (this._lastFire || 0) < 120) return;
+    if (name === 'fire') this._lastFire = now;
+    const ac = this.ac || (this.ac = new (window.AudioContext || window.webkitAudioContext)());
+    if (ac.state === 'suspended') ac.resume();
+    const t = ac.currentTime, out = ac.createGain();
+    out.gain.value = 0.1 * g; out.connect(ac.destination);
+    const noise = (dur, f0, f1) => {
+      const b = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const src = ac.createBufferSource(); src.buffer = b;
+      const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      src.connect(fl).connect(out); src.start(t);
+    };
+    if (name === 'boom' || name === 'impact') {
+      const o = ac.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(name === 'boom' ? 85 : 130, t); o.frequency.exponentialRampToValueAtTime(28, t + 0.4);
+      const gn = ac.createGain(); gn.gain.setValueAtTime(1, t); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      o.connect(gn).connect(out); o.start(t); o.stop(t + 0.55);
+      noise(name === 'boom' ? 0.5 : 0.25, 900, 90);
+    } else if (name === 'fire') noise(0.09, 2400, 300);
+    else if (name === 'rip') noise(0.5, 3000, 150);
+    else if (name === 'clang') {
+      const o = ac.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(660, t);
+      const gn = ac.createGain(); gn.gain.setValueAtTime(0.5, t); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      o.connect(gn).connect(out); o.start(t); o.stop(t + 0.32);
+    } else if (name === 'whistle') {
+      for (const dt of [0, 0.14]) {
+        const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(2300, t + dt);
+        const gn = ac.createGain(); gn.gain.setValueAtTime(0.4, t + dt); gn.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.1);
+        o.connect(gn).connect(out); o.start(t + dt); o.stop(t + dt + 0.12);
+      }
+    }
+  }
+
+  renderVals() {
+    const s = this.state;
+    const pct = (v) => `${v.toFixed(1)}%`;
+    // stats rows (two-sided meters share the row: widths are each side's share of the pair)
+    const S2 = this.stats, mom = this._mom || { home: 0, away: 0 };
+    const mk = (label, hv, av, hTxt, aTxt) => {
+      const tot = hv + av;
+      const hw = tot > 0 ? (hv / tot) * 100 : 0, aw = tot > 0 ? (av / tot) * 100 : 0;
+      return { label, hTxt, aTxt, hw: `${hw.toFixed(1)}%`, aw: `${aw.toFixed(1)}%` };
+    };
+    const posTot = S2.possMs.home + S2.possMs.away;
+    const posPct = (v) => posTot > 0 ? `${Math.round(v / posTot * 100)}%` : '—';
+    const dngTot = S2.dangerMs.home + S2.dangerMs.away;
+    const dngPct = (v) => dngTot > 0 ? `${Math.round(v / dngTot * 100)}%` : '—';
+    const cardTxt = (side) => `${S2.yellow[side]}Y${S2.red[side] ? ` ${S2.red[side]}R` : ''}`;
+    const statRows = [
+      mk('POSSESSION', S2.possMs.home, S2.possMs.away, posPct(S2.possMs.home), posPct(S2.possMs.away)),
+      mk('SHOTS (ON TGT)', S2.shots.home, S2.shots.away, `${S2.shots.home} (${S2.sot.home})`, `${S2.shots.away} (${S2.sot.away})`),
+      mk('CORNERS', S2.corners.home, S2.corners.away, String(S2.corners.home), String(S2.corners.away)),
+      mk('CARDS', S2.yellow.home + S2.red.home * 2, S2.yellow.away + S2.red.away * 2, cardTxt('home'), cardTxt('away')),
+      mk('DANGER TIME', S2.dangerMs.home, S2.dangerMs.away, dngPct(S2.dangerMs.home), dngPct(S2.dangerMs.away)),
+      mk('MOMENTUM', mom.home, mom.away, `${Math.round(mom.home * 100)}`, `${Math.round(mom.away * 100)}`),
+    ];
+    return {
+      canvasRef: this.canvasRef, sparkRef: this.sparkRef,
+      isPortraitUI: !s.isDesktop, isDesktop: s.isDesktop, landscapeHint: s.landscapeHint,
+      scoreText: s.scoreText, clockText: s.clockText, utcText: s.utcText,
+      suspended: s.suspended, suspendSecs: s.suspendSecs,
+      barEng: `${s.prob.home.toFixed(1)}%`, barDraw: `${s.prob.draw.toFixed(1)}%`, barArg: `${s.prob.away.toFixed(1)}%`,
+      barEngLbl: `ENG ${s.prob.home.toFixed(1)}`, barDrawLbl: `DRAW ${s.prob.draw.toFixed(1)}`, barArgLbl: `${s.prob.away.toFixed(1)} ARG`,
+      chipEng: `ENGLAND ${pct(s.prob.home)}`, chipArg: `ARGENTINA ${pct(s.prob.away)}`,
+      chipEngPct: pct(s.prob.home), chipArgPct: pct(s.prob.away),
+      threatShow: !!s.threatText, threatText: s.threatText,
+      tenMenHome: s.tenMen.home, tenMenAway: s.tenMen.away,
+      feedRows: s.feed, statRows,
+      sheetTabFeed: s.sheetTab === 'feed', sheetTabStats: s.sheetTab === 'stats',
+      tabFeedColor: s.sheetTab === 'feed' ? '#e8ecdf' : 'rgba(210,220,205,.4)',
+      tabStatsColor: s.sheetTab === 'stats' ? '#e8ecdf' : 'rgba(210,220,205,.4)',
+      onTabFeed: () => this.setState({ sheetTab: 'feed', sheetOpen: true }),
+      onTabStats: () => this.setState({ sheetTab: 'stats', sheetOpen: true }),
+      sheetShift: s.sheetOpen ? '0px' : 'calc(100% - 96px)',
+      playLabel: s.playing ? '❚❚' : '▶', speedLabel: `${s.speed}×`,
+      soundLabel: s.sound ? 'SND ON' : 'SND OFF', soundColor: s.sound ? '#d3ab48' : 'rgba(210,220,205,.55)',
+      bannerShow: !!s.banner, bannerTitle: s.banner?.title || '', bannerSub: s.banner?.sub || '',
+      bannerAccent: s.banner ? ({ home: '#c03a4e', away: '#d9b02a', neutral: '#d3ab48' })[s.banner.tone] || '#d3ab48' : '#d3ab48',
+      replayShow: s.replayShow,
+      onTogglePlay: () => this.setState(st => { this.driver && this.driver.setPaused(st.playing); return { playing: !st.playing }; }),
+      onCycleSpeed: () => this.setState(st => { const nx = st.speed === 1 ? 2 : st.speed === 2 ? 4 : 1; this.driver && this.driver.setSpeed(nx); return { speed: nx }; }),
+      onToggleSound: () => this.setState(st => ({ sound: !st.sound })),
+      onSheetDown: (e) => { this._shY = e.clientY; },
+      onSheetUp: (e) => {
+        const dy = e.clientY - (this._shY ?? e.clientY);
+        if (dy < -24) this.setState({ sheetOpen: true });
+        else if (dy > 24) this.setState({ sheetOpen: false });
+        else this.setState(st => ({ sheetOpen: !st.sheetOpen }));
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>
