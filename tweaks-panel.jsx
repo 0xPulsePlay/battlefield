@@ -59,8 +59,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const __TWEAKS_STYLE = `
-  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
-    max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;
+    width:min(300px, calc(100vw - 24px));
+    max-height:min(62dvh, calc(100vh - 32px));display:flex;flex-direction:column;
     transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom right;
     background:rgba(250,249,247,.78);color:#29261b;
     -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
@@ -272,13 +273,19 @@ function TweaksPanel({ title = 'Tweaks', children }) {
 
   if (!open) {
     if (!standalone) return null;
+    // launcher: bottom-right corner on mobile (per HUD layout), top-right on desktop
+    const desktop = typeof matchMedia !== 'undefined' && matchMedia('(min-width: 1024px)').matches;
+    const pos = desktop
+      ? { top: 'calc(env(safe-area-inset-top) + 10px)', right: 12 }
+      : { bottom: 'calc(env(safe-area-inset-bottom) + 14px)', right: 12 };
     return (
       <button aria-label={'Open ' + title} onClick={() => setOpen(true)}
-        style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 10px)', right: 12,
-          zIndex: 2147483646, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 11px',
-          borderRadius: 6, background: 'rgba(8,12,9,.82)', border: '1px solid rgba(200,210,190,.25)',
-          color: '#e2e7dc', font: '600 9.5px/1 "IBM Plex Mono",ui-monospace,monospace',
-          letterSpacing: '1.5px', cursor: 'pointer',
+        style={{ position: 'fixed', ...pos,
+          zIndex: 2147483646, display: 'flex', alignItems: 'center', gap: 6,
+          minHeight: 46, padding: '8px 13px',
+          borderRadius: 9, background: 'rgba(8,12,9,.82)', border: '1px solid rgba(200,210,190,.25)',
+          color: '#e2e7dc', font: '700 10px/1 "IBM Plex Mono",ui-monospace,monospace',
+          letterSpacing: '2px', cursor: 'pointer',
           backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
         <i style={{ width: 5, height: 5, borderRadius: '50%', background: '#d3ab48', display: 'inline-block' }}></i>
         {title.toUpperCase()}

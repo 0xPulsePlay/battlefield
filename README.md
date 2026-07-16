@@ -1,10 +1,13 @@
 # The Probability Battlefield
 
-A World Cup match rendered as a war between two national armies on an undulating isometric
-diorama. Army sizes are live de-margined win probabilities, the frontline is pushed by
-possession-danger data, match events fire war cinematics, and market suspensions roll literal
-fog of war over the field. England (green territory, bottom-of-phone) vs Argentina (sun-baked
-khaki, top).
+A World Cup match rendered as a war between two national armies across an infinite, mountain-
+ringed isometric landscape. Army sizes are live de-margined win probabilities, the frontline is
+pushed by possession-danger data, match events fire war cinematics, and market suspensions roll
+literal fog of war over the field. England (white/St George red, green territory, bottom-of-phone)
+vs Argentina (albiceleste/gold, sun-baked khaki, top). The warzone is a real-proportioned soccer
+pitch — mowing stripes, glowing chalk lines, goals behind each HQ, benches with pacing coaches,
+corner flags, floodlights — set apart from the dimmer wilderness around it. Team palettes are
+configurable (`opts.teams` on the engine) so any two nations can fight.
 
 **Current phase: UI experience.** The app runs on a synthetic match driver that reproduces
 measured TxLINE data behavior (tick cadence, suspension durations, the real semifinal's
@@ -25,15 +28,18 @@ browser for the command-console layout (≥1024px wide).
 
 | Input | Action |
 |---|---|
-| Drag (one finger / left mouse) | **Orbit** — horizontal rotates (yaw), vertical tilts the camera angle |
-| Two-finger drag | Pan |
-| Pinch | Zoom |
+| Drag (one finger / left mouse) | **Orbit** — horizontal rotates (yaw), vertical drag-up lowers / drag-down raises the camera angle (tilt 0.15–0.85) |
+| Two-finger drag | Pan (bounded to the arena) |
+| Pinch | Zoom (0.55–2.6) |
 | Shift-drag, Ctrl-drag, or right-drag (mouse) | Pan |
 | Scroll wheel | Zoom |
 | Alt + scroll wheel | Rotate |
 | Double-tap / double-click | Recenter (resets pan, zoom, rotation, tilt) |
-| Bottom sheet tabs | WAR FEED (event ticker) / STATS (live match stats) |
+| FEED / STATS (bottom-left) | Centered overlays: war feed ticker · live match stats |
+| WAR ROOM (bottom-right) | Dev tweaks panel — fire goals, threats, fog, momentum, finale |
 | ❚❚ / 1× / SND | Pause · replay speed · sound toggle |
+
+On desktop (≥1024px) the feed and stats live in permanent side columns instead of overlays.
 
 Dev triggers (browser console): `BF.inject({kind:'goal', side:'home', minute:54, probJump:{from:28.4,to:69.7}})`,
 `BF.threat('away')`, `BF.fog(true)`, `BF.mom('home', 0.9)`, `BF.finale()` — same event queue the
@@ -43,14 +49,18 @@ scripted timeline and tweaks panel use.
 
 ```
 driver.js    Synthetic data source. Emits BattleFrame (~4Hz) + BattleEvent through the exact
-             contract a real WebSocket feed will use. THIS is the file the real-data bridge
-             replaces (point it at the ingestion engine's /battle WS instead).
-engine.js    Pure canvas renderer: terrain relief, camps, armies, raids, ambient warfare,
-             cinematics, fog, victory overrun. Zero business logic; replaying frames replays
-             the war. Camera (pan/zoom/rotate) and all palettes live here.
-index.html   HUD shell + component logic (probability bar, score/clock, war feed, stats panel,
-             banners, bottom sheet). Uses the Design Components runtime (support.js) so the file
-             stays in sync with the Claude Design project it was born from.
+             contract a real feed will use. THIS is the file the real-data bridge replaces —
+             see BRIDGE-NOTES.md for the researched field-by-field mapping onto the ingestion
+             engine's /v1/stream/fixtures/:id composite SSE.
+engine.js    Pure canvas renderer: infinite chunked terrain + mountains, real-proportioned
+             pitch, two-part trench, camps, armies, raids, ambient warfare, cinematics, fog,
+             victory overrun. Zero business logic; replaying frames replays the war. Camera
+             (orbit/pan/zoom) and the configurable team palettes (TEAMS_DEFAULT / opts.teams)
+             live here.
+index.html   HUD shell + component logic (three-way probability boxes with trend arrows,
+             score/clock, war feed, live match stats, banners, corner buttons + overlays).
+             Uses the Design Components runtime (support.js) so the file stays in sync with
+             the Claude Design project it was born from.
 war-room.jsx / tweaks-panel.jsx   The floating tweaks panel — every trigger routes through
              window.BF → driver.inject(): one code path for scripted, hand-fired, and real data.
 ```
@@ -62,8 +72,10 @@ synthetic one and everything else stays identical.
 
 ## Provenance
 
-Mirrors the Claude Design project "The Probability Battlefield" (claude.ai/design), including the
-round of feedback applied 2026-07-16: richer palette + lakes/road, undulating relief with an
-extruded board edge, world rotation, the horizontal three-way probability bar, the match-stats
-HUD, and readable glass-card event banners. Iterate here; port polished changes back to the
-design project as needed.
+Born from the Claude Design project "The Probability Battlefield" (claude.ai/design). **This repo
+is the source of truth** — iterate here; port polished changes back to the design project
+manually if a showroom copy is wanted. Two big feedback rounds applied 2026-07-16: first the
+richer palette / relief / rotation / three-way probability bar / stats HUD / glass banners; then
+the full world rebuild — orbit camera, infinite mountain-ringed terrain, real-proportioned pitch
+with soccer furniture, two-part trench, England/Argentina team identity with accurate flags,
+rounder AoE-style sprites, corner-button mobile HUD with live trend arrows and live stats.

@@ -19,26 +19,39 @@ function rgba(c, a) { const [r, g, b] = rgbv(c); return `rgba(${r},${g},${b},${a
 const COL = {
   stage: '#060a07',
   homeEarth: '#6b9c40', awayEarth: '#a8924f',
-  edge: '#2a3320', skirt: '#3d2f19', skirtSide: '#261d0e', strata: '#5c4a2e',
   scorch: '#241a0c', sand: '#c2a86b', wire: '#8a8a7e', trench: '#3a2f18',
-  water: '#2f6fd6', waterDeep: '#1f56b0', shore: '#cdb377', road: '#8f7350', roadEdge: '#6d573c',
+  asphalt: '#4c4a45', asphaltEdge: '#3a3834',
   tree: '#2f6b33', tree2: '#46934a', trunk: '#5a4630', smoke: '#9a9e96', flash: '#ffd98c', gold: '#d3ab48',
-  home: { main: '#f0f2f5', deep: '#2c4066', accent: '#c03a4e', tint: '#7086ab', tracer: '#f0e0c0' },
-  away: { main: '#8fc4ec', deep: '#4f83ad', accent: '#d9b02a', tint: '#6fa3c4', tracer: '#ffe9a8' },
 };
-const CAMP_V = { home: 0.055, away: 0.945 };
+// Team identity — everything on the battlefield derives from these. When real data
+// arrives, pass `opts.teams` with any club/nation palette and the whole board follows.
+const TEAMS_DEFAULT = {
+  home: { // England — white & St George red, navy detail
+    name: 'ENGLAND', main: '#f4f6f8', deep: '#22355c', accent: '#d3273e',
+    tint: '#8fa3c4', tracer: '#f0e0c0', pattern: 'cross', kit2: '#d3273e',
+  },
+  away: { // Argentina — albiceleste sky & white, gold sun
+    name: 'ARGENTINA', main: '#ffffff', deep: '#4f92cf', accent: '#f2b705',
+    tint: '#7ab5e8', tracer: '#ffe9a8', pattern: 'stripes', kit2: '#86c5f4',
+  },
+};
+const CAMP_V = { home: -0.06, away: 1.06 };
 const DIR = { home: 1, away: -1 }; // +v = toward away
-const LAKES = [{ u: -0.55, v: 0.3, r: 0.1 }, { u: 0.5, v: 0.72, r: 0.12 }];
-const ROAD_U = (v) => 0.16 + Math.sin(v * 2.7 + 0.5) * 0.38 + Math.sin(v * 6.1) * 0.08;
+// The battle zone is a ghosted stadium: chalk pitch, goals behind the camps, floodlights.
+const PITCH = { u: 1.08, v0: -0.14, v1: 1.14, boxW: 0.62, boxD: 0.2, goalW: 0.3, goalD: 0.07, circleR: 0.13 };
 
 export class BattleEngine {
   constructor(canvas, opts = {}) {
     this.cv = canvas; this.ctx = canvas.getContext('2d');
     this.opts = opts;
-    this.names = opts.names || { home: 'ENGLAND', away: 'ARGENTINA' };
+    this.T = {
+      home: { ...TEAMS_DEFAULT.home, ...(opts.teams?.home || {}) },
+      away: { ...TEAMS_DEFAULT.away, ...(opts.teams?.away || {}) },
+    };
+    this.names = opts.names || { home: this.T.home.name, away: this.T.away.name };
     this.reduced = opts.reducedMotion ?? (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     this.portrait = true;
-    this.cam = { zoom: 1, x: 0, y: 0, rot: 0, tilt: 0.4 };
+    this.cam = { zoom: 0.82, x: 0, y: 0, rot: 0, tilt: 0.45 };
     this._cr = 1; this._sr = 0; this._shx = 0; this._shy = 0;
     this.shake = 0; this.flashOv = 0;
     this.now = 0; this.budget = 1; this.fpsE = 60;
@@ -78,21 +91,37 @@ export class BattleEngine {
     this.k = Math.min(W, H) / 430;
     this._vig = null;
   }
-  recenter() { this.cam = { zoom: 1, x: 0, y: 0, rot: 0, tilt: 0.4 }; }
+  recenter() { this.cam = { zoom: this.portrait ? 0.82 : 0.95, x: 0, y: 0, rot: 0, tilt: 0.45 }; }
 
   // world rotation (around board centre) — cached sin/cos set each frame
   _rot(u, v) { const w = (v - 0.5) * 2; return { u: u * this._cr - w * this._sr, w: u * this._sr + w * this._cr }; }
-  // gentle rolling relief; flattens at the camps, the board rim, and the lakes
+  // how deep into the encircling highlands a point is (0 = arena floor, 1 = high range)
+  _mtnF(u, v) {
+    const du = Math.max(0, Math.abs(u) - 1.55), dv2 = Math.max(0, Math.abs(v - 0.5) - 0.88);
+    const d = Math.hypot(du, dv2 * 1.6);
+    return d <= 0.1 ? 0 : Math.min(1, (d - 0.1) / 0.95);
+  }
+  // gentle rolling relief on the arena floor; mountains rise with distance from the pitch,
+  // slope-limited so they can never climb into the view of the battlefield itself
   _hgt(u, v) {
     const a = Math.sin(u * 3.9 + 1.7) * Math.cos(v * 7.1 - 0.5)
       + Math.sin(u * 8.3 + v * 4.4 - 2.1) * 0.5
       + Math.cos(u * 1.9 + v * 12.7) * 0.35
       + Math.sin(u * 15.7 - 1.1) * Math.sin(v * 21.3 + 0.7) * 0.18;
-    const camp = clamp((Math.min(v - 0.015, 0.985 - v)) / 0.12, 0, 1);
-    const rim = clamp((1.04 - Math.abs(u)) / 0.22, 0, 1);
-    let m = 0.7 * (0.2 + 0.8 * camp) * (0.35 + 0.65 * rim);
-    for (const L of LAKES) { const d = Math.hypot((u - L.u) * 0.75, v - L.v); m *= clamp((d - L.r * 0.7) / (L.r * 0.9), 0.08, 1); }
-    return a * m;
+    let m = 0.62;
+    if (Math.abs(u) < 1.3) {
+      const dCamp = Math.min(Math.abs(v - CAMP_V.home), Math.abs(v - CAMP_V.away));
+      m *= 0.2 + 0.8 * clamp(dCamp / 0.1, 0, 1);
+    }
+    let h = a * m;
+    const mf = this._mtnF(u, v);
+    if (mf > 0) {
+      const ridge = Math.sin(u * 1.7 + 2.3) * Math.cos(v * 2.6 - 1.1)
+        + Math.sin(u * 3.1 - v * 2.2 + 0.8) * 0.6
+        + Math.sin(u * 6.3 + v * 5.1) * 0.3;
+      h += (1.25 + ridge) * mf * mf * 3.6;
+    }
+    return h;
   }
   _p(u, v, z = 0) {
     const c = this.cam, R = this._rot(u, v), ru = R.u, rv = R.w / 2 + 0.5;
@@ -111,16 +140,6 @@ export class BattleEngine {
 
   // ---------- world ----------
   _buildWorld() {
-    this.patches = [];
-    for (let i = 0; i < 64; i++) {
-      const v = Math.random(); if (Math.abs(v - 0.5) < 0.06) continue;
-      this.patches.push({ u: rnd(-0.95, 0.95), v, r: rnd(0.02, 0.06), f: rnd(0.85, 1.12) });
-    }
-    this.trees = [];
-    for (let i = 0; i < 26; i++) this.trees.push({ u: (Math.random() < 0.5 ? -1 : 1) * rnd(0.78, 0.97), v: rnd(0.06, 0.94), s: rnd(0.7, 1.25) });
-    for (let i = 0; i < 10; i++) this.trees.push({ u: rnd(-0.9, 0.9), v: Math.random() < 0.5 ? rnd(0.005, 0.02) : rnd(0.98, 0.995), s: rnd(0.6, 1) });
-    for (const L of LAKES) for (let i = 0; i < 5; i++) { const a2 = rnd(0, Math.PI * 2); this.trees.push({ u: L.u + Math.cos(a2) * L.r * rnd(1.6, 2.1), v: L.v + Math.sin(a2) * L.r * rnd(0.9, 1.2), s: rnd(0.6, 1) }); }
-    this.trees = this.trees.filter(tr => Math.abs(tr.u - ROAD_U(tr.v)) > 0.09 && LAKES.every(L => Math.hypot((tr.u - L.u) * 0.75, tr.v - L.v) > L.r * 1.3));
     this.camps = {};
     for (const side of ['home', 'away']) {
       const v0 = CAMP_V[side], d = DIR[side];
@@ -156,9 +175,10 @@ export class BattleEngine {
 
   _trench(v, first) {
     if (!first && this.trench) { this.scars.push({ v: this.trench.v, a: 0.5 }); if (this.scars.length > 6) this.scars.shift(); }
-    const bags = []; for (let u = -0.88; u < 0.88; u += 0.055) bags.push({ u: u + rnd(-0.012, 0.012), s: rnd(0.8, 1.2), o: Math.random() < 0.5 ? 1 : -1 });
-    this.trench = { v, bags, dugT: this.now };
+    this.trench = { v, dugT: this.now };
   }
+  // deterministic per-position hash for lattice decorations (sandbags etc.)
+  _hash(a, b) { return Math.abs(Math.sin(a * 12.9898 + b * 78.233) * 43758.5453) % 1; }
 
   resetBoard() {
     this.craters = []; this.scars = []; this.decals = []; this.shells = []; this.parts = [];
@@ -238,6 +258,12 @@ export class BattleEngine {
     this.now += dt;
     const fps = 1 / Math.max(dt, 1e-3); this.fpsE = this.fpsE * 0.95 + fps * 0.05;
     if (this.fpsE < 48) this.budget = Math.max(0.35, this.budget - 0.01); else if (this.fpsE > 56) this.budget = Math.min(1, this.budget + 0.005);
+    // bounded exploration: the landscape is endless but the arena stays reachable
+    if (this.su) {
+      const mx = this.su * this.cam.zoom * 1.2, my = (this.portrait ? this.sv : this.su * 2.2) * this.cam.zoom * 0.8;
+      this.cam.x = clamp(this.cam.x, -mx, mx);
+      this.cam.y = clamp(this.cam.y, -my, my);
+    }
     this.shake *= Math.exp(-dt * 3.2); this.flashOv *= Math.exp(-dt * 4);
     // front easing / snap
     if (this.snapTo != null) { this.frontE = this.snapTo; this.snapTo = null; }
@@ -246,7 +272,7 @@ export class BattleEngine {
     const fr = this.fogRip ? 0.12 : (this.fogTarget > this.fogT ? 0.8 : 0.5);
     this.fogT += (this.fogTarget - this.fogT) * (1 - Math.exp(-dt / fr));
     if (this.fogT < 0.02 && this.fogTarget === 0) this.fogRip = false;
-    for (const b of (this.fogBlobs || (this.fogBlobs = Array.from({ length: 9 }, () => ({ u: rnd(-1.3, 1.3), v: Math.random(), r: rnd(0.3, 0.6), vu: rnd(0.015, 0.045) * (Math.random() < 0.5 ? -1 : 1) }))))) {
+    for (const b of (this.fogBlobs || (this.fogBlobs = Array.from({ length: 9 }, () => ({ u: rnd(-1.6, 1.6), v: rnd(-0.2, 1.2), r: rnd(0.3, 0.6), vu: rnd(0.015, 0.045) * (Math.random() < 0.5 ? -1 : 1) }))))) {
       b.u += b.vu * dt; if (b.u > 1.5) b.u = -1.5; if (b.u < -1.5) b.u = 1.5;
     }
     // trench re-dig
@@ -300,14 +326,16 @@ export class BattleEngine {
     const d = DIR[side], row = Math.floor(si / 3), col = si % 3;
     const jit = Math.sin(si * 37.7) * 0.06;
     let v = this.frontE - d * (0.075 + row * 0.034);
-    v = side === 'home' ? clamp(v, 0.09, 0.9) : clamp(v, 0.1, 0.91);
+    v = clamp(v, -0.03, 1.03);
     const u = (col - 1) * 0.52 + jit + (ui % 2) * 0.075 - 0.037 + Math.floor(ui / 2) * 0.02;
     return { u: clamp(u, -0.9, 0.9), v: v - d * Math.floor(ui / 2) * 0.02 };
   }
-  _spawnSquad(side) {
+  _spawnSquad(side, fromBench = false) {
     const us = []; const n = 4;
-    const u0 = rnd(-0.4, 0.4);
-    for (let i = 0; i < n; i++) us.push({ u: u0 + rnd(-0.05, 0.05), v: CAMP_V[side] + DIR[side] * 0.02, ph: rnd(0, 9), sp: rnd(0.05, 0.065) });
+    // substitutions march on from the dugout; regular reinforcements from the camp
+    const u0 = fromBench ? -1.12 : rnd(-0.4, 0.4);
+    const v0 = fromBench ? CAMP_V[side] + DIR[side] * 0.075 : CAMP_V[side] + DIR[side] * 0.02;
+    for (let i = 0; i < n; i++) us.push({ u: u0 + rnd(-0.05, 0.05), v: v0 + rnd(-0.01, 0.01), ph: rnd(0, 9), sp: rnd(0.05, 0.065) });
     this.squads[side].push({ side, units: us, state: 'in', alpha: 1 });
   }
   _armies(dt) {
@@ -342,12 +370,12 @@ export class BattleEngine {
       const base = { safe: this.frontE - d * rnd(0.16, 0.24), attack: this.frontE - d * 0.035, danger: this.frontE + d * 0.11, box: this.frontE + d * 0.02 }[zone];
       for (const un of R.units) {
         un.wT -= dt;
-        if (un.wT <= 0) { un.wT = rnd(1.5, 3.5); un.tu = clamp(rnd(-0.45, 0.45), -0.85, 0.85); un.tv = clamp(base + rnd(-0.03, 0.03), 0.06, 0.94); }
+        if (un.wT <= 0) { un.wT = rnd(1.5, 3.5); un.tu = clamp(rnd(-0.45, 0.45), -0.85, 0.85); un.tv = clamp(base + rnd(-0.03, 0.03), -0.05, 1.05); }
         const du = un.tu - un.u, dv = un.tv - un.v, dd = Math.hypot(du, dv);
         if (dd > 0.008) { un.u += du / dd * un.sp * dt; un.v += dv / dd * un.sp * dt; un.ph += dt * 10; un.moving = true; } else un.moving = false;
         if (active && zone === 'box' && Math.random() < dt * 5 * this.budget) {
           this.parts.push(this._pt(un.u, un.v, 0.9, 'flash', COL.flash, 0.1, { vz: 0, size: 2.5 }));
-          this.parts.push(this._pt(un.u, un.v, 0.8, 'tracer', COL[side].tracer, 0.28, { vu: rnd(-0.1, 0.1), vv: d * rnd(0.5, 0.8), vz: 0, size: 1 }));
+          this.parts.push(this._pt(un.u, un.v, 0.8, 'tracer', this.T[side].tracer, 0.28, { vu: rnd(-0.1, 0.1), vv: d * rnd(0.5, 0.8), vz: 0, size: 1 }));
           if (Math.random() < 0.4) this.parts.push(this._pt(un.u + rnd(-0.1, 0.1), un.v + d * 0.06, 0.9, 'flash', COL.flash, 0.09, { vz: 0, size: 2 }));
         }
       }
@@ -390,9 +418,9 @@ export class BattleEngine {
         V.saluteT = 0.09 / this.budget;
         const sq = this.squads[w][Math.floor(Math.random() * this.squads[w].length)];
         const un = sq.units[Math.floor(Math.random() * sq.units.length)];
-        this.parts.push(this._pt(un.u, un.v, 1, 'tracer', COL[w].tracer, rnd(0.5, 0.9), { vu: rnd(-0.03, 0.03), vv: rnd(-0.03, 0.03), vz: rnd(9, 14), size: 1.2 }));
+        this.parts.push(this._pt(un.u, un.v, 1, 'tracer', this.T[w].tracer, rnd(0.5, 0.9), { vu: rnd(-0.03, 0.03), vv: rnd(-0.03, 0.03), vz: rnd(9, 14), size: 1.2 }));
       }
-      if (Math.random() < dt * 1.2) this.parts.push(this._pt(rnd(-0.6, 0.6), CAMP_V[l] + DIR[l] * rnd(0, 0.15), rnd(6, 10), 'flash', COL[w].accent, 0.4, { vz: 0, size: rnd(3, 6) }));
+      if (Math.random() < dt * 1.2) this.parts.push(this._pt(rnd(-0.6, 0.6), CAMP_V[l] + DIR[l] * rnd(0, 0.15), rnd(6, 10), 'flash', this.T[w].accent, 0.4, { vz: 0, size: rnd(3, 6) }));
     }
   }
   _armisticeUpdate(dt) {
@@ -427,7 +455,7 @@ export class BattleEngine {
       if (a.cool <= 0 && Math.random() < rate * 1.6) {
         a.cool = 0.7;
         const d = DIR[a.side];
-        this._fireShell({ u0: a.u, v0: a.v, u1: rnd(-0.8, 0.8), v1: clamp(this.frontE + d * rnd(0.03, 0.17), 0.06, 0.94), dud: Math.random() < 0.07 });
+        this._fireShell({ u0: a.u, v0: a.v, u1: rnd(-0.8, 0.8), v1: clamp(this.frontE + d * rnd(0.03, 0.17), -0.08, 1.08), dud: Math.random() < 0.07 });
         this.parts.push(this._pt(a.u, a.v, 0.8, 'flash', COL.flash, 0.12, { vz: 0, size: 3.5 }));
       }
     }
@@ -437,14 +465,14 @@ export class BattleEngine {
       if (this._moveTank(t, dt)) {
         const d = DIR[t.side];
         t.wu = rnd(-0.72, 0.72);
-        const lo = t.side === 'home' ? 0.09 : Math.min(this.frontE + 0.08, 0.9);
-        const hi = t.side === 'home' ? Math.max(this.frontE - 0.08, 0.14) : 0.91;
+        const lo = t.side === 'home' ? -0.04 : Math.min(this.frontE + 0.08, 1.04);
+        const hi = t.side === 'home' ? Math.max(this.frontE - 0.08, 0.0) : 1.04;
         t.wv = clamp(rnd(lo, hi) * 0.35 + (this.frontE - d * 0.14) * 0.65 + rnd(-0.06, 0.06), Math.min(lo, hi), Math.max(lo, hi));
       }
       t.cool -= dt;
       if (t.cool <= 0 && F.possession.side === t.side && F.possession.zone === 'box') {
         t.cool = rnd(3, 5);
-        this._fireShell({ u0: t.u, v0: t.v, u1: rnd(-0.5, 0.5), v1: clamp(this.frontE + DIR[t.side] * rnd(0.04, 0.1), 0.06, 0.94), h: 3.5, dur: 1.2 });
+        this._fireShell({ u0: t.u, v0: t.v, u1: rnd(-0.5, 0.5), v1: clamp(this.frontE + DIR[t.side] * rnd(0.04, 0.1), -0.08, 1.08), h: 3.5, dur: 1.2 });
       }
     }
     // mortars (at trench)
@@ -453,7 +481,7 @@ export class BattleEngine {
       if (m.cool <= 0) {
         m.cool = rnd(5, 10);
         const d = DIR[side], v0 = this.frontE - d * 0.025;
-        this._fireShell({ u0: m.u, v0, u1: m.u + rnd(-0.15, 0.15), v1: clamp(this.frontE + d * rnd(0.03, 0.07), 0.06, 0.94), h: 2.2, dur: 1, small: true });
+        this._fireShell({ u0: m.u, v0, u1: m.u + rnd(-0.15, 0.15), v1: clamp(this.frontE + d * rnd(0.03, 0.07), -0.08, 1.08), h: 2.2, dur: 1, small: true });
       }
     }
     // planes
@@ -469,7 +497,7 @@ export class BattleEngine {
       const p = this.planes[i]; p.t += dt / p.dur;
       if (p.t >= 1) { this.planes.splice(i, 1); continue; }
       const d = DIR[p.side];
-      p.v = d === 1 ? lerp(-0.12, 1.12, p.t) : lerp(1.12, -0.12, p.t);
+      p.v = d === 1 ? lerp(-0.3, 1.3, p.t) : lerp(1.3, -0.3, p.t);
       p.u = p.u0 + Math.sin(p.t * 5) * 0.06;
       if (p.bomber && !this.victory) {
         const distToFront = Math.abs(p.v - this.frontE);
@@ -541,7 +569,7 @@ export class BattleEngine {
         this.cine = { kind: 'goal', t: 0, dur: 3 };
         const cv = CAMP_V[enemy], tgt = { u: rnd(-0.2, 0.2), v: cv - DIR[enemy] * 0.02 };
         this._fireShell({ u0: rnd(-0.3, 0.3), v0: this.frontE - d * 0.05, u1: tgt.u, v1: tgt.v, big: true, h: 9, dur: 0.9 });
-        this.cineFx.push({ at: 0.9, fn: () => { this._explosion(tgt.u + 0.12, tgt.v + DIR[enemy] * 0.02, 1.6, true); this.rings.push({ u: tgt.u, v: tgt.v, t: 0, dur: 1.1, r0: 0.03, r1: 0.55, col: COL[S].accent }); this.opts.onSfx?.('boom', 1); } });
+        this.cineFx.push({ at: 0.9, fn: () => { this._explosion(tgt.u + 0.12, tgt.v + DIR[enemy] * 0.02, 1.6, true); this.rings.push({ u: tgt.u, v: tgt.v, t: 0, dur: 1.1, r0: 0.03, r1: 0.55, col: this.T[S].accent }); this.opts.onSfx?.('boom', 1); } });
         this.cineFx.push({ at: 1.15, fn: () => this._explosion(tgt.u - 0.14, tgt.v - DIR[enemy] * 0.015, 1.3, true) });
         this.opts.onBanner?.({ title: `GOAL — ${this.names[S]}`, sub: `${e.minute}'  ·  ${e.probJump.from.toFixed(1)}% → ${e.probJump.to.toFixed(1)}%`, tone: S, hold: 3400 });
         break;
@@ -549,7 +577,7 @@ export class BattleEngine {
       case 'shot': {
         this.cine = { kind: 'shot', t: 0, dur: 2.2 };
         const out = e.outcome;
-        const tv = out === 'OffTarget' ? clamp(this.frontE + d * 0.22, 0.05, 0.95) : this.frontE + d * 0.012;
+        const tv = out === 'OffTarget' ? clamp(this.frontE + d * 0.22, -0.06, 1.06) : this.frontE + d * 0.012;
         const tu = out === 'OffTarget' ? (Math.random() < 0.5 ? -1 : 1) * rnd(0.75, 0.92) : rnd(-0.35, 0.35);
         this._fireShell({
           u0: rnd(-0.3, 0.3), v0: this.frontE - d * 0.08, u1: tu, v1: tv, h: 6, dur: 1.1,
@@ -573,7 +601,7 @@ export class BattleEngine {
         const cu = Math.random() < 0.5 ? -0.95 : 0.95;
         const cv = CAMP_V[enemy] - DIR[enemy] * 0.03;
         const us = []; for (let i = 0; i < 5; i++) us.push({ u: cu + rnd(-0.03, 0.03), v: cv + rnd(-0.02, 0.02), ph: rnd(0, 9) });
-        this.flanks.push({ side: S, units: us, tu: cu * 0.35, tv: clamp(this.frontE + d * 0.05, 0.08, 0.92), t: 0 });
+        this.flanks.push({ side: S, units: us, tu: cu * 0.35, tv: clamp(this.frontE + d * 0.05, -0.02, 1.02), t: 0 });
         break;
       }
       case 'card': {
@@ -602,7 +630,7 @@ export class BattleEngine {
         this.cine = { kind: 'sub', t: 0, dur: 2 };
         const live = this.squads[S].filter(q => q.state === 'hold');
         if (live.length) live[live.length - 1].state = 'out';
-        this._spawnSquad(S);
+        this._spawnSquad(S, true);
         break;
       }
       default: break;
@@ -615,11 +643,12 @@ export class BattleEngine {
     if (!W) return;
     this._shx = (Math.random() - 0.5) * this.shake; this._shy = (Math.random() - 0.5) * this.shake;
     this._cr = Math.cos(this.cam.rot); this._sr = Math.sin(this.cam.rot);
-    // camera tilt → effective projection scales (top-down at 0 … low dramatic angle at 1)
-    const tl = clamp(this.cam.tilt, 0.05, 0.95);
+    // camera tilt (z-axis orbit): low dramatic angle at 1, high overview at 0
+    const tl = clamp(this.cam.tilt, 0.15, 0.85);
     this._svE = this.sv * (1.30 - 0.75 * tl);
-    this._szE = this.sz * (0.2 + 2.0 * tl);
+    this._szE = this.sz * (0.25 + 1.9 * tl);
     this._shE = this.sh * (0.5 + 1.25 * tl);
+    this._spriteV = 0.55 + 0.85 * tl; // fixed-pixel sprites lean with the camera too
     ctx.fillStyle = COL.stage; ctx.fillRect(0, 0, W, H);
     // ground glow
     const gc = this._p(0, 0.5, 0);
@@ -665,155 +694,311 @@ export class BattleEngine {
     if (alpha < 1) ctx.globalAlpha = 1;
   }
 
-  _terrain() {
-    if (this._terr) return this._terr;
-    // Smooth relief: light comes from a fixed-epsilon slope gradient (resolution-independent),
-    // with only a whisper of per-cell variation — the smoothness lives in the height field.
-    const build = (NU, NV) => {
-      const cells = [], eu = (2 / NU) * 0.2, ev = (1 / NV) * 0.2, g = 0.045;
-      for (let iv = 0; iv < NV; iv++) for (let iu = 0; iu < NU; iu++) {
-        const u0 = -1 + 2 * iu / NU, u1 = -1 + 2 * (iu + 1) / NU, v0 = iv / NV, v1 = (iv + 1) / NV;
-        const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
-        const dhdu = this._hgt(uc + g, vc) - this._hgt(uc - g, vc);
-        const dhdv = this._hgt(uc, vc + g) - this._hgt(uc, vc - g);
-        const hsh = Math.abs(Math.sin(iu * 12.9898 + iv * 78.233) * 43758.5453) % 1;
-        cells.push({
-          u0e: u0 - eu, u1e: u1 + eu, v0e: v0 - ev, v1e: v1 + ev, uc, vc,
-          lf: clamp((0.985 + hsh * 0.03) * (1 + dhdv * 1.55 - dhdu * 0.55), 0.68, 1.33), d: 0,
-        });
+  // ---------- infinite terrain (chunked, cached) ----------
+  // The landscape has no edges: terrain is generated per chunk around the viewport and
+  // cached. Chunks carry cells (with baked slope lighting) plus scattered decor.
+  _chunk(map, cx, cy, cs) {
+    const key = cx + ':' + cy;
+    let ch = map.get(key);
+    if (ch) return ch;
+    const WU = 8 * (2 / 54), WV = 8 * (1 / 72);
+    const N = Math.round(8 / cs), CU = WU / N, CV = WV / N;
+    const ou = cx * WU, ov = cy * WV;
+    const eu = CU * 0.2, ev = CV * 0.2, g = 0.045;
+    const cells = [], trees = [], patches = [];
+    for (let iv = 0; iv < N; iv++) for (let iu = 0; iu < N; iu++) {
+      const u0 = ou + iu * CU, u1 = u0 + CU, v0 = ov + iv * CV, v1 = v0 + CV;
+      const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
+      const dhdu = this._hgt(uc + g, vc) - this._hgt(uc - g, vc);
+      const dhdv = this._hgt(uc, vc + g) - this._hgt(uc, vc - g);
+      const hsh = this._hash(cx * 8 + iu, cy * 8 + iv);
+      // highlands get a baked rock/snow colour; arena cells stay territory-coloured
+      const mf = this._mtnF(uc, vc);
+      let col = null;
+      if (mf > 0.05) {
+        const hz = this._hgt(uc, vc);
+        col = mix(mix('#7fa054', '#8b8478', Math.min(1, mf * 1.15)), '#e9edf1', clamp((hz - 4.4) / 2.4, 0, 0.85));
       }
-      return cells;
+      // the pitch itself gets mowing stripes; everything outside reads as rougher ground
+      const inP = Math.abs(uc) <= PITCH.u && vc >= PITCH.v0 && vc <= PITCH.v1;
+      let lf = clamp((0.99 + hsh * 0.02) * (1 + dhdv * 1.05 - dhdu * 0.4), 0.7, 1.3);
+      if (inP) {
+        const band = Math.floor((vc - PITCH.v0) / ((PITCH.v1 - PITCH.v0) / 16));
+        lf *= (band % 2 ? 0.952 : 1.05);
+      }
+      cells.push({ u0e: u0 - eu, u1e: u1 + eu, v0e: v0 - ev, v1e: v1 + ev, uc, vc, col, inP, lf, d: 0 });
+    }
+    // decor: forests fill the world OUTSIDE the pitch; the arena itself stays clear
+    const inPitch = (u, v) => Math.abs(u) < PITCH.u + 0.08 && v > PITCH.v0 - 0.06 && v < PITCH.v1 + 0.06;
+    const nTree = (h => h < 0.42 ? 0 : h < 0.78 ? 1 : h < 0.94 ? 2 : 3)(this._hash(cx * 3 + 1, cy * 7 + 2));
+    for (let i = 0; i < nTree; i++) {
+      const u = ou + this._hash(cx + i * 17, cy * 13 + i) * WU;
+      const v = ov + this._hash(cx * 5 - i, cy + i * 29) * WV;
+      if (inPitch(u, v) || this._mtnF(u, v) > 0.42) continue;
+      // country-flavoured foliage: broadleaf oaks on England's half, taller firs on Argentina's
+      const bias = v < 0.5 ? 0.72 : 0.3;
+      trees.push({ u, v, s: 0.65 + this._hash(cx + i, cy - i) * 0.7, kind: this._hash(cx - i * 7, cy + i * 3) < bias ? 'round' : 'fir' });
+    }
+    if (this._hash(cx * 11, cy * 17) < 0.45) {
+      const u = ou + this._hash(cx * 11 + 1, cy - 5) * WU, v = ov + this._hash(cx - 3, cy * 17 + 1) * WV;
+      patches.push({ u, v, r: 0.02 + this._hash(cx + 2, cy + 9) * 0.03, f: 0.85 + this._hash(cx * 2 - 1, cy * 4 + 1) * 0.27 });
+    }
+    ch = { cells, trees, patches };
+    map.set(key, ch);
+    if (map.size > 160) map.delete(map.keys().next().value);
+    return ch;
+  }
+  // inverse-project the viewport corners to world uv (ignoring height, generously padded)
+  _viewAABB() {
+    const inv = (x, y) => {
+      const c = this.cam;
+      let ru, rv;
+      if (this.portrait) {
+        rv = 0.5 - (y - this.cy - c.y) / (this.sv * c.zoom);
+        ru = ((x - this.cx - c.x) / c.zoom - (rv - 0.5) * this.sh) / this.su;
+      } else {
+        ru = (y - this.cy - c.y) / (this.su * c.zoom);
+        rv = ((x - this.cx - c.x) / c.zoom - ru * this.sh) / this.sv + 0.5;
+      }
+      const w = (rv - 0.5) * 2;
+      const u = ru * this._cr + w * this._sr;
+      const w0 = -ru * this._sr + w * this._cr;
+      return { u, v: w0 / 2 + 0.5 };
     };
-    return (this._terr = { fine: build(54, 72), coarse: build(24, 32) });
-  }
-  _skirt() {
-    const ctx = this.ctx, D = 3.4, S = 14;
-    const edges = [
-      { pts: (i) => [-1 + 2 * i / S, 0], col: COL.skirt },
-      { pts: (i) => [-1 + 2 * i / S, 1], col: COL.skirt },
-      { pts: (i) => [-1, i / S], col: COL.skirtSide },
-      { pts: (i) => [1, i / S], col: COL.skirtSide },
-    ];
-    for (const E of edges) {
-      const top = [], bot = [];
-      for (let i = 0; i <= S; i++) {
-        const [u, v] = E.pts(i);
-        top.push(this._p(u, v, 0));
-        bot.push(this._p(u, v, -(D + this._hgt(u, v))));
-      }
-      this._poly(top.concat(bot.reverse()), E.col);
+    let uMin = 1e9, uMax = -1e9, vMin = 1e9, vMax = -1e9;
+    for (const [x, y] of [[0, 0], [this.W, 0], [0, this.H], [this.W, this.H]]) {
+      const p = inv(x, y);
+      uMin = Math.min(uMin, p.u); uMax = Math.max(uMax, p.u);
+      vMin = Math.min(vMin, p.v); vMax = Math.max(vMax, p.v);
     }
-    // strata line
-    ctx.strokeStyle = rgba(COL.strata, 0.5); ctx.lineWidth = Math.max(1, this.k * 0.8);
-    for (const E of edges) {
-      ctx.beginPath();
-      for (let i = 0; i <= S; i++) { const [u, v] = E.pts(i); const p = this._p(u, v, -(1.3 + this._hgt(u, v))); i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); }
+    return { uMin: uMin - 0.4, uMax: uMax + 0.4, vMin: vMin - 0.24, vMax: vMax + 0.24 };
+  }
+  // ghosted stadium markings — the arena IS a faded chalk pitch
+  _pitch() {
+    const ctx = this.ctx, k = Math.max(0.8, this.k * 0.9 * this.cam.zoom);
+    const line = (pts, w = 1) => {
+      ctx.lineWidth = k * w; ctx.beginPath();
+      pts.forEach((p, i) => { const q = this._p(p[0], p[1], 0.02); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
       ctx.stroke();
+    };
+    const seg = (u0, v0, u1, v1, n = 14) => { const pts = []; for (let i = 0; i <= n; i++) pts.push([u0 + (u1 - u0) * i / n, v0 + (v1 - v0) * i / n]); return pts; };
+    const U = PITCH.u, v0 = PITCH.v0, v1 = PITCH.v1;
+    // boundary glow pass — the warzone edge reads from any distance
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+    line(seg(-U, v0, U, v0), 6); line(seg(-U, v1, U, v1), 6);
+    line(seg(-U, v0, -U, v1, 26), 6); line(seg(U, v0, U, v1, 26), 6);
+    // crisp boundary
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    line(seg(-U, v0, U, v0), 1.5); line(seg(-U, v1, U, v1), 1.5);
+    line(seg(-U, v0, -U, v1, 26), 1.5); line(seg(U, v0, U, v1, 26), 1.5);
+    // interior markings
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    line(seg(-U, 0.5, U, 0.5, 20));
+    const circ = [];
+    for (let i = 0; i <= 44; i++) { const a = i / 44 * Math.PI * 2; circ.push([Math.cos(a) * PITCH.circleR * 2.2, 0.5 + Math.sin(a) * PITCH.circleR]); }
+    line(circ);
+    for (const side of ['home', 'away']) {
+      const ve = side === 'home' ? v0 : v1, d = side === 'home' ? 1 : -1;
+      line(seg(-PITCH.boxW, ve, -PITCH.boxW, ve + d * PITCH.boxD, 5));
+      line(seg(PITCH.boxW, ve, PITCH.boxW, ve + d * PITCH.boxD, 5));
+      line(seg(-PITCH.boxW, ve + d * PITCH.boxD, PITCH.boxW, ve + d * PITCH.boxD, 16));
+      line(seg(-PITCH.goalW, ve, -PITCH.goalW, ve + d * PITCH.goalD, 3));
+      line(seg(PITCH.goalW, ve, PITCH.goalW, ve + d * PITCH.goalD, 3));
+      line(seg(-PITCH.goalW, ve + d * PITCH.goalD, PITCH.goalW, ve + d * PITCH.goalD, 10));
     }
   }
-  _lake(L) {
-    const ctx = this.ctx, steps = 22;
-    const ring = (rr, z) => { const pts = []; for (let i = 0; i < steps; i++) { const a2 = i / steps * Math.PI * 2; pts.push(this._p(L.u + Math.cos(a2) * rr * 1.35, L.v + Math.sin(a2) * rr * 0.75, z)); } return pts; };
-    this._poly(ring(L.r * 1.24, 0.015), COL.shore);
-    this._poly(ring(L.r, -0.1), COL.water);
-    this._poly(ring(L.r * 0.6, -0.14), COL.waterDeep);
-    const c = this._p(L.u - L.r * 0.3, L.v - L.r * 0.12, -0.06);
-    ctx.fillStyle = 'rgba(235,248,255,0.16)';
-    ctx.beginPath(); ctx.ellipse(c.x, c.y, L.r * 0.55 * this.su * this.cam.zoom * 0.6, L.r * 0.22 * this.sv * this.cam.zoom * 0.35, 0, 0, 7); ctx.fill();
+  // The front line is two-part: a PERMANENT outer trench at the world's midpoint running
+  // endlessly beyond the pitch, and the MOVING inner trench inside the pitch; a smooth
+  // interpolation joins them just outside the touchlines. This draws a hard visual
+  // boundary around the warzone itself.
+  _trenchV(u, vInner) {
+    const t = clamp((Math.abs(u) - (PITCH.u - 0.06)) / 0.42, 0, 1);
+    const s = t * t * (3 - 2 * t);
+    return lerp(vInner, 0.5, s);
   }
-  _road() {
-    const ctx = this.ctx, HALF = 0.045, pts = [];
-    for (let v = 0; v <= 1.0001; v += 0.04) pts.push({ v: Math.min(v, 1), u: ROAD_U(Math.min(v, 1)) });
-    const left = pts.map(p => this._p(p.u - HALF, p.v, 0.012));
-    const right = [...pts].reverse().map(p => this._p(p.u + HALF, p.v, 0.012));
-    this._poly(left.concat(right), COL.road);
-    ctx.strokeStyle = rgba(COL.roadEdge, 0.9); ctx.lineWidth = Math.max(0.8, this.k * 0.8 * this.cam.zoom);
-    for (const off of [-HALF, HALF]) {
-      ctx.beginPath();
-      pts.forEach((p, i) => { const q = this._p(p.u + off, p.v, 0.016); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
-      ctx.stroke();
+  // filled band that follows a v-path across the visible width
+  _band(u0, u1, vAt, half, fill, steps = 44) {
+    const pts = [];
+    for (let i = 0; i <= steps; i++) { const u = u0 + (u1 - u0) * i / steps; pts.push(this._p(u, vAt(u) - half, 0)); }
+    for (let i = steps; i >= 0; i--) { const u = u0 + (u1 - u0) * i / steps; pts.push(this._p(u, vAt(u) + half, 0)); }
+    this._poly(pts, fill);
+  }
+  // stadium furniture — goals behind each camp, corner flags, floodlight towers, dugouts
+  _goal(side) {
+    const ctx = this.ctx, ve = side === 'home' ? PITCH.v0 - 0.006 : PITCH.v1 + 0.006;
+    const gw = 0.2, h = 2.1;
+    const pl = this._p(-gw, ve, 0), pr = this._p(gw, ve, 0);
+    const tl = this._p(-gw, ve, h), tr2 = this._p(gw, ve, h);
+    ctx.strokeStyle = '#eef0ea'; ctx.lineWidth = Math.max(1.2, this.k * 1.5 * this.cam.zoom); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(pl.x, pl.y); ctx.lineTo(tl.x, tl.y); ctx.lineTo(tr2.x, tr2.y); ctx.lineTo(pr.x, pr.y); ctx.stroke();
+    ctx.lineCap = 'butt';
+    // net hint
+    ctx.strokeStyle = 'rgba(230,232,225,0.25)'; ctx.lineWidth = Math.max(0.5, this.k * 0.4 * this.cam.zoom);
+    for (let i = 1; i < 5; i++) {
+      const x0 = lerp(pl.x, pr.x, i / 5), y0 = lerp(pl.y, pr.y, i / 5);
+      const x1 = lerp(tl.x, tr2.x, i / 5), y1 = lerp(tl.y, tr2.y, i / 5);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    }
+  }
+  _cornerFlag(u, v) {
+    const ctx = this.ctx, k = this.k * this.cam.zoom;
+    const b = this._p(u, v, 0), t = this._p(u, v, 1.1);
+    ctx.strokeStyle = '#d8d8cc'; ctx.lineWidth = Math.max(0.8, k * 0.7);
+    ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+    ctx.fillStyle = COL.gold;
+    ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(t.x + 3.2 * k, t.y + 1 * k); ctx.lineTo(t.x, t.y + 2 * k); ctx.closePath(); ctx.fill();
+  }
+  _floodlight(u, v) {
+    const ctx = this.ctx, k = this.k * this.cam.zoom;
+    const b = this._p(u, v, 0), t = this._p(u, v, 6.2);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(b.x, b.y + 1, 3.4 * k, 1.4 * k, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#5c5e56'; ctx.lineWidth = Math.max(1, k * 1.1);
+    ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+    // lamp head tilted toward the pitch + warm glow
+    const dirX = u > 0 ? -1 : 1;
+    ctx.fillStyle = '#8e9188';
+    ctx.fillRect(t.x - 2.6 * k + dirX * 0.8 * k, t.y - 2.2 * k, 5.2 * k, 2.6 * k);
+    ctx.fillStyle = '#ffe9b0';
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++)
+      ctx.fillRect(t.x - 1.9 * k + dirX * 0.8 * k + i * 1.5 * k, t.y - 1.8 * k + j * 1.1 * k, 0.9 * k, 0.7 * k);
+    const g2 = ctx.createRadialGradient(t.x, t.y - k, 0, t.x, t.y - k, 22 * k);
+    g2.addColorStop(0, 'rgba(255,236,170,0.28)'); g2.addColorStop(1, 'rgba(255,236,170,0)');
+    ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(t.x, t.y - k, 22 * k, 0, 7); ctx.fill();
+  }
+  _bench(side) {
+    // dugout beside the pitch — subs march on from here
+    const team = this.T[side], d = DIR[side], v = CAMP_V[side] + d * 0.12, u = -1.24;
+    this._box(u, v, 0.055, 0.014, 0.55, mix(team.deep, '#4c4e46', 0.45));
+    this._box(u, v - 0.004 * d, 0.052, 0.004, 0.75, mix(team.main, '#888', 0.5), 0.55);
+    const ctx = this.ctx, k = this.k * this.cam.zoom;
+    // seated subs
+    for (let i = -1; i <= 1; i++) {
+      const p = this._p(u + i * 0.028, v + d * 0.006, 0.55);
+      ctx.fillStyle = team.main; ctx.fillRect(p.x - 1 * k, p.y - 2.6 * k, 2 * k, 2.6 * k);
+      ctx.fillStyle = team.deep; ctx.beginPath(); ctx.arc(p.x, p.y - 3.2 * k, 0.95 * k, 0, 7); ctx.fill();
+    }
+    // the coach, pacing the touchline
+    const cp = this._p(u + 0.075 + Math.sin(this.now * 0.7) * 0.012, v - d * 0.012, 0);
+    ctx.fillStyle = '#2a2d33'; ctx.fillRect(cp.x - 1.2 * k, cp.y - 4.6 * k, 2.4 * k, 4.6 * k);
+    ctx.fillStyle = '#d8c9b0'; ctx.beginPath(); ctx.arc(cp.x, cp.y - 5.5 * k, 1.1 * k, 0, 7); ctx.fill();
+  }
+  // country-themed folly per side — England: clock tower · Argentina: obelisk
+  _folly(side) {
+    const team = this.T[side], ctx = this.ctx, k = this.k * this.cam.zoom;
+    if (side === 'home') {
+      const u = -1.38, v = CAMP_V.home + 0.3;
+      this._box(u, v, 0.02, 0.016, 3.0, '#8a7d5e');
+      const t = this._p(u, v, 3.0);
+      ctx.fillStyle = '#efe9d8'; ctx.beginPath(); ctx.arc(t.x, t.y - 1.2 * k, 1.5 * k, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#3a3427'; ctx.lineWidth = Math.max(0.6, k * 0.5);
+      ctx.beginPath(); ctx.moveTo(t.x, t.y - 1.2 * k); ctx.lineTo(t.x, t.y - 2.3 * k); ctx.stroke();
+      const apex = this._p(u, v, 4.1);
+      ctx.fillStyle = mix(team.accent, '#4a3f30', 0.45);
+      ctx.beginPath(); ctx.moveTo(t.x - 2.2 * k, t.y); ctx.lineTo(t.x + 2.2 * k, t.y); ctx.lineTo(apex.x, apex.y); ctx.closePath(); ctx.fill();
+    } else {
+      const u = -1.38, v = CAMP_V.away - 0.3;
+      const b = this._p(u, v, 0), t = this._p(u, v, 4.4);
+      const w0 = 2.4 * k, w1 = 0.7 * k;
+      ctx.fillStyle = '#e8e6dc';
+      ctx.beginPath(); ctx.moveTo(b.x - w0 / 2, b.y); ctx.lineTo(b.x + w0 / 2, b.y); ctx.lineTo(t.x + w1 / 2, t.y); ctx.lineTo(t.x - w1 / 2, t.y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#c9c6b8';
+      ctx.beginPath(); ctx.moveTo(t.x - w1 / 2, t.y); ctx.lineTo(t.x + w1 / 2, t.y); ctx.lineTo(t.x, t.y - 1.6 * k); ctx.closePath(); ctx.fill();
     }
   }
   _drawBoard() {
     const t = this.tintOv, F = this.F;
-    const win = this.victory ? COL[this.victory.side].tint : null;
+    const win = this.victory ? this.T[this.victory.side].tint : null;
     // territory base colors — lush home green vs sun-baked away khaki, deepened by probability
-    let hCol = mix(COL.homeEarth, COL.home.tint, 0.04 + 0.18 * (F.prob.home / 100));
-    let aCol = mix(COL.awayEarth, COL.away.tint, 0.03 + 0.13 * (F.prob.away / 100));
+    let hCol = mix(COL.homeEarth, this.T.home.tint, 0.04 + 0.18 * (F.prob.home / 100));
+    let aCol = mix(COL.awayEarth, this.T.away.tint, 0.03 + 0.13 * (F.prob.away / 100));
     if (win) { hCol = mix(hCol, win, t * 0.75); aCol = mix(aCol, win, t * 0.75); }
-    // extruded edge (real thickness), then relief mesh far-to-near
-    this._skirt();
-    const T = this._terrain();
-    const cells = this.budget < 0.65 ? T.coarse : T.fine;
-    // depth order only changes with yaw / layout — cache the sort
-    const sortKey = (this.portrait ? 'P' : 'D') + ':' + Math.round(this.cam.rot / 0.04);
-    if (cells.sortKey !== sortKey) {
-      for (const c of cells) c.d = this._depth(c.uc, c.vc);
-      cells.sort((x, y) => x.d - y.d);
-      cells.sortKey = sortKey;
+    // visible world rect → chunks; the landscape is endless, only what's on screen is drawn
+    const A = this._aabb = this._viewAABB();
+    const maps = this._chunks || (this._chunks = {});
+    let cs = this.cam.zoom < 0.8 ? 3 : this.cam.zoom < 1.2 ? 2 : this.cam.zoom < 1.8 ? 1.5 : 1;
+    if (this.budget < 0.65) cs = Math.max(cs, 2);
+    const map = maps[cs] || (maps[cs] = new Map());
+    const WU = 8 * (2 / 54), WV = 8 * (1 / 72);
+    const cx0 = Math.floor(A.uMin / WU), cx1 = Math.floor(A.uMax / WU);
+    const cy0 = Math.floor(A.vMin / WV), cy1 = Math.floor(A.vMax / WV);
+    const cells = [], deco = this._deco = { trees: [], patches: [] };
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+      const ch = this._chunk(map, cx, cy, cs);
+      for (const c of ch.cells) cells.push(c);
+      deco.trees.push(...ch.trees); deco.patches.push(...ch.patches);
     }
+    for (const c of cells) c.d = this._depth(c.uc, c.vc);
+    cells.sort((x, y) => x.d - y.d);
+    // ground outside the pitch is rougher and dimmer — the warzone itself stays vivid
+    const hOut = mix(hCol, '#6f7857', 0.35), aOut = mix(aCol, '#6f7857', 0.35);
     for (const c of cells) {
-      const base = c.vc < this.frontE ? hCol : aCol;
+      const homeSide = c.vc < this._trenchV(c.uc, this.frontE);
+      const base = c.col || (homeSide ? (c.inP ? hCol : hOut) : (c.inP ? aCol : aOut));
       this._poly([this._p(c.u0e, c.v0e), this._p(c.u1e, c.v0e), this._p(c.u1e, c.v1e), this._p(c.u0e, c.v1e)], shade(base, c.lf));
     }
-    for (const L of LAKES) this._lake(L);
-    this._road();
-    // patches
     const ctx = this.ctx;
-    for (const p of this.patches) {
+    // patches
+    for (const p of deco.patches) {
       const c = this._p(p.u, p.v);
-      ctx.fillStyle = p.f > 1 ? 'rgba(255,255,240,0.05)' : 'rgba(8,18,4,0.1)';
+      ctx.fillStyle = p.f > 1 ? 'rgba(255,255,240,0.04)' : 'rgba(8,18,4,0.07)';
       ctx.beginPath(); ctx.ellipse(c.x, c.y, p.r * this.su * this.cam.zoom, p.r * this.sv * this.cam.zoom * 0.5, 0, 0, 7); ctx.fill();
     }
-    // grid (follows the terrain)
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
-    for (let v = 0.1; v < 1; v += 0.1) {
-      ctx.beginPath();
-      for (let u = -1; u <= 1.0001; u += 0.08) { const p = this._p(u, v, 0.008); u <= -1 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); }
-      ctx.stroke();
-    }
-    // no-man's-land
-    ctx.globalAlpha = 0.4; this._ribbon(-1, 1, this.frontE - 0.05, this.frontE + 0.05, COL.scorch);
-    ctx.globalAlpha = 0.5; this._ribbon(-1, 1, this.frontE - 0.022, this.frontE + 0.022, COL.scorch);
+    this._pitch();
+    // no-man's-land — follows the two-part trench: moving inside the pitch,
+    // interpolating out to the permanent midline beyond the touchlines
+    const nmlAt = (u) => this._trenchV(u, this.frontE);
+    ctx.globalAlpha = 0.4; this._band(A.uMin, A.uMax, nmlAt, 0.05, COL.scorch);
+    ctx.globalAlpha = 0.5; this._band(A.uMin, A.uMax, nmlAt, 0.022, COL.scorch);
     ctx.globalAlpha = 1;
-    // scars
-    for (const s of this.scars) { ctx.globalAlpha = s.a; this._ribbon(-0.9, 0.9, s.v - 0.006, s.v + 0.006, '#100d07', 12); ctx.globalAlpha = 1; }
+    // scars — historical inner-trench positions, pitch only
+    for (const s of this.scars) { ctx.globalAlpha = s.a; this._ribbon(-PITCH.u, PITCH.u, s.v - 0.006, s.v + 0.006, '#100d07', 18); ctx.globalAlpha = 1; }
     // decals + craters
     for (const dd of this.decals) { const c = this._p(dd.u, dd.v); ctx.globalAlpha = dd.a; ctx.fillStyle = '#0c0a06'; ctx.beginPath(); ctx.ellipse(c.x, c.y, dd.r * this.su * this.cam.zoom, dd.r * this.sv * this.cam.zoom * 0.5, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
     for (const cr of this.craters) { const c = this._p(cr.u, cr.v); ctx.globalAlpha = cr.a; ctx.fillStyle = '#14100a'; ctx.beginPath(); ctx.ellipse(c.x, c.y, cr.r * this.su * this.cam.zoom, cr.r * this.sv * this.cam.zoom * 0.5, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
-    // edge line (follows the relief)
-    ctx.strokeStyle = 'rgba(215,225,205,0.14)'; ctx.lineWidth = 1;
-    ctx.beginPath();
-    const rim = [];
-    for (let u = -1; u <= 1.0001; u += 0.125) rim.push([u, 0]);
-    for (let v = 0; v <= 1.0001; v += 0.125) rim.push([1, v]);
-    for (let u = 1; u >= -1.0001; u -= 0.125) rim.push([u, 1]);
-    for (let v = 1; v >= -0.0001; v -= 0.125) rim.push([-1, v]);
-    rim.forEach(([u, v], i) => { const p = this._p(u, v, 0.01); i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
-    ctx.closePath(); ctx.stroke();
-    // trench band + wire (flat-ish, draw before entities)
+    // trench band + wire — endless fortification following the two-part path
     const tv = this.trench.v;
-    this._ribbon(-0.92, 0.92, tv - 0.011, tv + 0.011, COL.trench);
-    this._ribbon(-0.92, 0.92, tv - 0.003, tv + 0.003, '#0d0a05');
+    const tAt = (u) => this._trenchV(u, tv);
+    this._band(A.uMin, A.uMax, tAt, 0.011, COL.trench);
+    this._band(A.uMin, A.uMax, tAt, 0.003, '#0d0a05');
     ctx.strokeStyle = COL.wire; ctx.lineWidth = Math.max(0.6, this.k * 0.7);
     for (const off of [-0.02, 0.02]) {
       ctx.beginPath();
-      for (let u = -0.9; u <= 0.9; u += 0.03) {
-        const p = this._p(u, tv + off + (Math.abs(u * 100) % 2 < 1 ? 0.004 : -0.004), 0.28);
-        u === -0.9 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+      let first = true;
+      for (let u = A.uMin; u <= A.uMax; u += 0.03) {
+        const p = this._p(u, tAt(u) + off + (Math.abs(u * 100) % 2 < 1 ? 0.004 : -0.004), 0.28);
+        first ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); first = false;
       }
       ctx.stroke();
-      for (let u = -0.9; u <= 0.9; u += 0.09) { const a = this._p(u, tv + off, 0), b = this._p(u, tv + off, 0.3); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      for (let u = Math.ceil(A.uMin / 0.09) * 0.09; u <= A.uMax; u += 0.09) { const a = this._p(u, tAt(u) + off, 0), b = this._p(u, tAt(u) + off, 0.3); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
     }
-    if (this.armistice) for (let u = -0.85; u <= 0.85; u += 0.12) this._box(u, tv, 0.006, 0.004, 0.7, '#d8d8d0');
+    if (this.armistice) for (let u = -0.85; u <= 0.85; u += 0.12) this._box(u, tAt(u), 0.006, 0.004, 0.7, '#d8d8d0');
   }
 
   _collect(D) {
     const push = (u, v, f, bias = 0) => D.push({ d: this._depth(u, v) + bias, f });
-    // sandbags
-    for (const b of this.trench.bags) push(b.u, this.trench.v + b.o * 0.016, () => this._box(b.u, this.trench.v + b.o * 0.016, 0.016 * b.s, 0.007, 0.32, COL.sand));
-    // trees
-    for (const tr of this.trees) push(tr.u, tr.v, () => this._tree(tr));
+    const A = this._aabb || { uMin: -1.4, uMax: 1.4, vMin: -0.1, vMax: 1.1 };
+    // sandbags — deterministic lattice following the two-part trench path
+    const tv2 = this.trench.v;
+    for (let i = Math.ceil(A.uMin / 0.055); i * 0.055 <= A.uMax; i++) {
+      const bu = i * 0.055 + (this._hash(i, 7) - 0.5) * 0.024;
+      const bv = this._trenchV(bu, tv2) + (this._hash(i, 13) < 0.5 ? 1 : -1) * 0.016;
+      const s = 0.8 + this._hash(i, 3) * 0.4;
+      push(bu, bv, () => this._box(bu, bv, 0.016 * s, 0.007, 0.32, COL.sand));
+    }
+    // trees (from the visible chunks)
+    for (const tr of (this._deco ? this._deco.trees : [])) push(tr.u, tr.v, () => this._tree(tr));
+    // stadium furniture — goals, corner flags, floodlights, dugouts, national follies
+    push(0, PITCH.v0 - 0.006, () => this._goal('home'));
+    push(0, PITCH.v1 + 0.006, () => this._goal('away'));
+    for (const [fu, fv] of [[-PITCH.u, PITCH.v0], [PITCH.u, PITCH.v0], [-PITCH.u, PITCH.v1], [PITCH.u, PITCH.v1]])
+      push(fu, fv, () => this._cornerFlag(fu, fv));
+    for (const [fu, fv] of [[-1.5, -0.08], [1.5, -0.08], [-1.5, 1.08], [1.5, 1.08]])
+      push(fu, fv, () => this._floodlight(fu, fv));
+    for (const side of ['home', 'away']) {
+      push(-1.24, CAMP_V[side] + DIR[side] * 0.12, () => this._bench(side));
+      push(-1.38, CAMP_V[side] + DIR[side] * 0.3, () => this._folly(side));
+    }
     // camps
     for (const side of ['home', 'away']) this._collectCamp(side, push);
     // artillery
@@ -839,17 +1024,22 @@ export class BattleEngine {
     }
   }
   _collectCamp(side, push) {
-    const C = this.camps[side], team = COL[side];
+    const C = this.camps[side], team = this.T[side];
     const mob = this.victory ? (side === this.victory.side ? 1 : 0) : this.F.momentum[side];
     const b = (o, col) => push(o.u, o.v, () => this._box(o.u, o.v, o.du, o.dv, o.h, col));
     b(C.hq, team.deep);
-    push(C.hq.u, C.hq.v, () => { this._box(C.hq.u, C.hq.v, C.hq.du * 0.5, C.hq.dv * 0.55, 0.8, team.main, C.hq.h); }, 0.001);
-    for (const t of C.tents) b(t, mix(team.main, '#6a6a5a', 0.45));
-    b(C.hospital, '#c9cCc2'.replace('C', 'c'));
+    push(C.hq.u, C.hq.v, () => this._roof(C.hq, side), 0.001);
+    for (const t of C.tents) push(t.u, t.v, () => this._tent(t, side));
+    b(C.hospital, '#dfe2da');
+    push(C.hospital.u, C.hospital.v, () => {
+      const o = C.hospital;
+      this._quadUV(o.u - 0.02, o.v - 0.005, o.u + 0.02, o.v + 0.005, '#c23434', o.h + 0.02);
+      this._quadUV(o.u - 0.006, o.v - 0.014, o.u + 0.006, o.v + 0.014, '#c23434', o.h + 0.02);
+    }, 0.001);
     push(C.depot.u, C.depot.v, () => { for (let i = 0; i < 3; i++) this._box(C.depot.u + i * 0.022 - 0.02, C.depot.v + (i % 2) * 0.01, 0.011, 0.008, 0.4 + (i % 2) * 0.15, '#5c5744'); });
     push(C.radar.u, C.radar.v, () => this._radar(C.radar, team));
     for (const g2 of C.aa) push(g2.u, g2.v, () => this._aa(g2, side));
-    push(C.flag.u, C.flag.v, () => this._flag(C.flag.u, C.flag.v, side, 3.2, 1, 0));
+    push(C.flag.u, C.flag.v, () => this._flag(C.flag.u, C.flag.v, side, 4.4, 1.45, 0));
     for (const pk of C.parked) push(pk.u, pk.v, () => this._tank({ side, u: pk.u, v: pk.v }, true));
     for (const f of C.fires) push(f.u, f.v, () => {
       const c = this._p(f.u, f.v, 0.15), fl = 0.6 + Math.sin(this.now * 11 + f.u * 40) * 0.4;
@@ -864,45 +1054,121 @@ export class BattleEngine {
   }
 
   _tree(tr) {
-    const k = this.k * this.cam.zoom * tr.s;
+    const k = this.k * this.cam.zoom * tr.s, ctx = this.ctx;
     const p = this._p(tr.u, tr.v, 0);
-    this.ctx.fillStyle = 'rgba(0,0,0,0.25)'; this.ctx.beginPath(); this.ctx.ellipse(p.x + 1, p.y + 1, 3.4 * k, 1.6 * k, 0, 0, 7); this.ctx.fill();
-    this.ctx.fillStyle = COL.trunk; this.ctx.fillRect(p.x - 0.7 * k, p.y - 3.4 * k, 1.4 * k, 3.4 * k);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(p.x + 1, p.y + 1, 3.4 * k, 1.6 * k, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = COL.trunk; ctx.fillRect(p.x - 0.7 * k, p.y - 3.4 * k, 1.4 * k, 3.4 * k);
     const top = this._p(tr.u, tr.v, 1.9 * tr.s);
-    this.ctx.fillStyle = shade(((tr.s * 100) | 0) % 2 ? COL.tree2 : COL.tree, 0.85 + (tr.u * 31 % 1) * 0.3);
-    this.ctx.beginPath(); this.ctx.moveTo(top.x, top.y - 4.5 * k); this.ctx.lineTo(top.x - 3.1 * k, top.y + 3.5 * k); this.ctx.lineTo(top.x + 3.1 * k, top.y + 3.5 * k); this.ctx.closePath(); this.ctx.fill();
+    const f = 0.85 + (Math.abs(tr.u * 31) % 1) * 0.3;
+    if (tr.kind === 'round') {
+      // broadleaf: overlapping round canopies with a lit crown
+      ctx.fillStyle = shade(COL.tree, f * 0.92);
+      ctx.beginPath(); ctx.arc(top.x - 1.2 * k, top.y + 0.7 * k, 2.7 * k, 0, 7); ctx.fill();
+      ctx.fillStyle = shade(COL.tree2, f);
+      ctx.beginPath(); ctx.arc(top.x + 0.7 * k, top.y - 0.4 * k, 3.1 * k, 0, 7); ctx.fill();
+      ctx.fillStyle = shade(COL.tree2, f * 1.18);
+      ctx.beginPath(); ctx.arc(top.x + 1.4 * k, top.y - 1.4 * k, 1.5 * k, 0, 7); ctx.fill();
+    } else {
+      // fir: two stacked tiers
+      ctx.fillStyle = shade(COL.tree, f);
+      ctx.beginPath(); ctx.moveTo(top.x, top.y - 1.4 * k); ctx.lineTo(top.x - 3.2 * k, top.y + 3.6 * k); ctx.lineTo(top.x + 3.2 * k, top.y + 3.6 * k); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = shade(COL.tree2, f);
+      ctx.beginPath(); ctx.moveTo(top.x, top.y - 4.6 * k); ctx.lineTo(top.x - 2.2 * k, top.y + 0.6 * k); ctx.lineTo(top.x + 2.2 * k, top.y + 0.6 * k); ctx.closePath(); ctx.fill();
+    }
+  }
+  _tent(o, side) {
+    // A-frame canvas tent in team colours
+    const team = this.T[side], ctx = this.ctx;
+    const b0 = this._p(o.u - o.du, o.v - o.dv, 0), b1 = this._p(o.u + o.du, o.v - o.dv, 0);
+    const b2 = this._p(o.u + o.du, o.v + o.dv, 0), b3 = this._p(o.u - o.du, o.v + o.dv, 0);
+    const r0 = this._p(o.u - o.du, o.v, o.h), r1 = this._p(o.u + o.du, o.v, o.h);
+    const cvs = mix(team.main, '#8a8676', 0.3);
+    this._poly([b0, b1, { x: r1.x, y: r1.y }, { x: r0.x, y: r0.y }], shade(cvs, 0.95));
+    this._poly([b3, b2, { x: r1.x, y: r1.y }, { x: r0.x, y: r0.y }], shade(cvs, 0.66));
+    this._poly([b0, b3, { x: r0.x, y: r0.y }], shade(cvs, 0.5));
+    this._poly([b1, b2, { x: r1.x, y: r1.y }], shade(cvs, 0.55));
+    ctx.strokeStyle = rgba(team.accent, 0.9); ctx.lineWidth = Math.max(1, this.k * this.cam.zoom * 0.9);
+    ctx.beginPath(); ctx.moveTo(r0.x, r0.y); ctx.lineTo(r1.x, r1.y); ctx.stroke();
+  }
+  _roof(o, side) {
+    // hipped roof on the HQ, in the team's accent
+    const team = this.T[side];
+    const cs = [[o.u - o.du, o.v - o.dv], [o.u + o.du, o.v - o.dv], [o.u + o.du, o.v + o.dv], [o.u - o.du, o.v + o.dv]]
+      .map(c => this._p(c[0], c[1], o.h));
+    const apex = this._p(o.u, o.v, o.h + 1.15);
+    const col = mix(team.accent, '#4a4038', 0.3);
+    this._poly([cs[0], cs[1], apex], shade(col, 0.95));
+    this._poly([cs[1], cs[2], apex], shade(col, 0.62));
+    this._poly([cs[2], cs[3], apex], shade(col, 0.75));
+    this._poly([cs[3], cs[0], apex], shade(col, 0.5));
   }
   _unit(un, side, alpha) {
-    const ctx = this.ctx, k = this.k * this.cam.zoom, team = COL[side];
+    const ctx = this.ctx, k = this.k * this.cam.zoom, team = this.T[side];
     const bob = un.moving ? Math.abs(Math.sin(un.ph)) * 1.2 * k : Math.sin(this.now * 2 + (un.ph || 0)) * 0.25 * k;
     const p = this._p(un.u, un.v, 0);
     if (alpha < 1) ctx.globalAlpha = alpha;
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 2 * k, 0.9 * k, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = team.main; ctx.fillRect(p.x - 1.2 * k, p.y - 5.6 * k - bob, 2.4 * k, 5 * k);
-    ctx.fillStyle = side === 'home' ? team.deep : '#e8eef2'; ctx.fillRect(p.x - 1.2 * k, p.y - 5.6 * k - bob, 2.4 * k, 1.5 * k);
+    // rounded kit body (height leans with the camera tilt)
+    const vSc = this._spriteV ?? 1;
+    const bw = 2.7 * k, bh = 4.3 * k * vSc, bx = p.x - bw / 2, by = p.y - bh - 1.2 * k * vSc - bob;
+    ctx.fillStyle = team.main;
+    ctx.beginPath();
+    ctx.moveTo(bx, by + bh); ctx.lineTo(bx, by + bw / 2);
+    ctx.arc(p.x, by + bw / 2, bw / 2, Math.PI, 0);
+    ctx.lineTo(bx + bw, by + bh); ctx.closePath(); ctx.fill();
+    // national kit pattern
+    ctx.fillStyle = team.kit2;
+    if (team.pattern === 'stripes') {
+      ctx.fillRect(p.x - bw * 0.34, by + 0.5 * k, bw * 0.2, bh - 0.9 * k);
+      ctx.fillRect(p.x + bw * 0.14, by + 0.5 * k, bw * 0.2, bh - 0.9 * k);
+    } else if (team.pattern === 'cross') {
+      ctx.fillRect(bx, by + bh * 0.44, bw, bh * 0.17);
+      ctx.fillRect(p.x - bw * 0.1, by + 0.3 * k, bw * 0.2, bh - 0.5 * k);
+    }
+    // helmet
+    ctx.fillStyle = team.deep;
+    ctx.beginPath(); ctx.arc(p.x, by - 0.7 * k, 1.25 * k, 0, 7); ctx.fill();
     if (alpha < 1) ctx.globalAlpha = 1;
   }
   _tank(t, parked = false) {
-    const team = COL[t.side], d = DIR[t.side];
-    this._box(t.u, t.v, 0.03, 0.042, 0.55, mix(team.deep, '#4a4c42', 0.55));
-    this._box(t.u, t.v, 0.016, 0.02, 0.4, mix(team.deep, '#5a5c50', 0.4), 0.55);
-    const a = this._p(t.u, t.v, 0.8), b = this._p(t.u, t.v + d * 0.05, 0.85);
-    const ctx = this.ctx; ctx.strokeStyle = '#3c3e36'; ctx.lineWidth = Math.max(1, 1.6 * this.k * this.cam.zoom);
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    if (!parked) { ctx.fillStyle = rgba(team.main, 0.9); const m = this._p(t.u, t.v, 1); ctx.fillRect(m.x - 1, m.y - 1, 2, 2); }
+    const team = this.T[t.side], d = DIR[t.side], ctx = this.ctx, k = this.k * this.cam.zoom;
+    // tracks
+    this._box(t.u - 0.018, t.v, 0.008, 0.044, 0.28, '#31332c');
+    this._box(t.u + 0.018, t.v, 0.008, 0.044, 0.28, '#31332c');
+    // hull (team-liveried) + rounded turret dome
+    this._box(t.u, t.v, 0.025, 0.038, 0.4, mix(team.deep, '#565a4c', 0.3), 0.2);
+    const c = this._p(t.u, t.v, 0.85);
+    ctx.fillStyle = mix(team.deep, '#6a6e60', 0.22);
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, 3.2 * k, 2.1 * k, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.beginPath(); ctx.ellipse(c.x - 0.7 * k, c.y - 0.6 * k, 1.4 * k, 0.8 * k, 0, 0, 7); ctx.fill();
+    // barrel
+    const b = this._p(t.u, t.v + d * 0.055, 0.95);
+    ctx.strokeStyle = '#3c3e36'; ctx.lineWidth = Math.max(1, 1.6 * k);
+    ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    // team roundel
+    if (!parked) { ctx.fillStyle = team.accent; ctx.beginPath(); ctx.arc(c.x + 1.1 * k, c.y + 0.6 * k, 0.85 * k, 0, 7); ctx.fill(); }
   }
   _truck(tr) {
-    const team = COL[tr.side];
+    const team = this.T[tr.side];
     this._box(tr.u, tr.v, 0.014, 0.026, 0.5, '#565848');
     this._box(tr.u, tr.v + DIR[tr.side] * (tr.phase === 'out' ? 0.018 : -0.018), 0.013, 0.009, 0.62, mix(team.deep, '#666', 0.5));
   }
   _arty(a) {
-    const d = DIR[a.side], team = COL[a.side];
-    this._box(a.u, a.v, 0.02, 0.014, 0.3, mix(team.deep, '#54564a', 0.6));
-    const p0 = this._p(a.u, a.v, 0.35), p1 = this._p(a.u, a.v + d * 0.035, 1.5);
-    const ctx = this.ctx; ctx.strokeStyle = '#494b40'; ctx.lineWidth = Math.max(1, 1.8 * this.k * this.cam.zoom);
+    const d = DIR[a.side], team = this.T[a.side], ctx = this.ctx, k = this.k * this.cam.zoom;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    const s = this._p(a.u, a.v); ctx.beginPath(); ctx.ellipse(s.x, s.y + 2, 5 * k, 2 * k, 0, 0, 7); ctx.fill();
+    // spoked wheels
+    for (const off of [-0.017, 0.017]) {
+      const w = this._p(a.u + off, a.v, 0.22);
+      ctx.fillStyle = '#2e2f28'; ctx.beginPath(); ctx.arc(w.x, w.y, 1.7 * k, 0, 7); ctx.fill();
+      ctx.fillStyle = '#585b4c'; ctx.beginPath(); ctx.arc(w.x, w.y, 0.7 * k, 0, 7); ctx.fill();
+    }
+    // carriage + long barrel
+    this._box(a.u, a.v, 0.013, 0.011, 0.22, mix(team.deep, '#54564a', 0.5), 0.14);
+    const p0 = this._p(a.u, a.v, 0.42), p1 = this._p(a.u, a.v + d * 0.04, 1.6);
+    ctx.strokeStyle = '#494b40'; ctx.lineWidth = Math.max(1, 1.9 * k);
     ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; const s = this._p(a.u, a.v); ctx.beginPath(); ctx.ellipse(s.x, s.y + 2, 5 * this.k * this.cam.zoom, 2 * this.k * this.cam.zoom, 0, 0, 7); ctx.fill();
   }
   _aa(g2, side) {
     this._box(g2.u, g2.v, 0.013, 0.011, 0.3, '#4c4e44');
@@ -919,21 +1185,42 @@ export class BattleEngine {
     ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(c.x + Math.cos(a) * 4.5 * this.k * this.cam.zoom, c.y + Math.sin(a) * 2 * this.k * this.cam.zoom); ctx.stroke();
   }
   _flag(u, v, side, h, scale, z0) {
-    const ctx = this.ctx, k = this.k * this.cam.zoom * scale, team = COL[side];
+    // Accurate, prominent national flags: St George's Cross · Argentine triband with the Sol de Mayo
+    const ctx = this.ctx, k = this.k * this.cam.zoom * scale, team = this.T[side];
     const base = this._p(u, v, z0), top = this._p(u, v, z0 + h);
     ctx.strokeStyle = '#8b8878'; ctx.lineWidth = Math.max(1, k);
     ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(top.x, top.y); ctx.stroke();
-    const fw = 11 * k, fh = 6.5 * k, n = 5;
+    const fw = 14 * k, fh = 8.5 * k * (this._spriteV ?? 1), n = 7;
+    let midWob = 0;
     for (let i = 0; i < n; i++) {
-      const wob = Math.sin(this.now * 3.2 + i * 0.9 + u * 10) * 1.3 * k * (i / n);
+      const wob = Math.sin(this.now * 3.2 + i * 0.9 + u * 10) * 1.4 * k * (i / n);
+      if (i === 3) midWob = wob;
       const x = top.x + (i / n) * fw, w = fw / n + 0.5;
-      if (side === 'home') {
-        ctx.fillStyle = '#e8e8e4'; ctx.fillRect(x, top.y + wob, w, fh);
-        ctx.fillStyle = COL.home.accent; ctx.fillRect(x, top.y + wob + fh * 0.38, w, fh * 0.24);
+      if (team.pattern === 'cross') {
+        // white field
+        ctx.fillStyle = '#f7f7f3'; ctx.fillRect(x, top.y + wob, w, fh);
+        // red cross: horizontal band on every strip, vertical bar on the centre strips
+        ctx.fillStyle = team.kit2;
+        ctx.fillRect(x, top.y + wob + fh * 0.4, w, fh * 0.2);
+        if (i === 3) ctx.fillRect(x, top.y + wob, w, fh);
       } else {
-        ctx.fillStyle = COL.away.main; ctx.fillRect(x, top.y + wob, w, fh * 0.33);
-        ctx.fillStyle = '#eef2f4'; ctx.fillRect(x, top.y + wob + fh * 0.33, w, fh * 0.34);
-        ctx.fillStyle = COL.away.main; ctx.fillRect(x, top.y + wob + fh * 0.67, w, fh * 0.33);
+        // celeste – white – celeste
+        ctx.fillStyle = team.kit2; ctx.fillRect(x, top.y + wob, w, fh * 0.333);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(x, top.y + wob + fh * 0.333, w, fh * 0.334);
+        ctx.fillStyle = team.kit2; ctx.fillRect(x, top.y + wob + fh * 0.667, w, fh * 0.333);
+      }
+    }
+    if (team.pattern !== 'cross') {
+      // Sol de Mayo
+      ctx.fillStyle = team.accent;
+      ctx.beginPath(); ctx.arc(top.x + fw / 2, top.y + midWob + fh / 2, 1.35 * k, 0, 7); ctx.fill();
+      ctx.strokeStyle = rgba(team.accent, 0.85); ctx.lineWidth = Math.max(0.5, k * 0.4);
+      for (let r = 0; r < 8; r++) {
+        const a = r / 8 * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(top.x + fw / 2 + Math.cos(a) * 1.6 * k, top.y + midWob + fh / 2 + Math.sin(a) * 1.6 * k);
+        ctx.lineTo(top.x + fw / 2 + Math.cos(a) * 2.3 * k, top.y + midWob + fh / 2 + Math.sin(a) * 2.3 * k);
+        ctx.stroke();
       }
     }
   }
@@ -961,7 +1248,7 @@ export class BattleEngine {
   _drawPlanes() {
     const ctx = this.ctx, k = this.k * this.cam.zoom;
     for (const pl of this.planes) {
-      const team = COL[pl.side];
+      const team = this.T[pl.side];
       const sh = this._p(pl.u, pl.v, 0);
       ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.beginPath(); ctx.ellipse(sh.x, sh.y, 7 * k, 2.6 * k, 0, 0, 7); ctx.fill();
       const p = this._p(pl.u, pl.v, 9);
@@ -1013,8 +1300,8 @@ export class BattleEngine {
       ctx.strokeStyle = rgba(COL.gold, 0.5 + pulse * 0.4); ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.ellipse(c.x, c.y, R * 0.7, R * 0.32, 0, 0, 7); ctx.stroke();
     };
-    if (T.home.goal || T.home.penalty || T.home.corner) flare(0, 0.86);
-    if (T.away.goal || T.away.penalty || T.away.corner) flare(0, 0.14);
+    if (T.home.goal || T.home.penalty || T.home.corner) flare(0, 1.0);
+    if (T.away.goal || T.away.penalty || T.away.corner) flare(0, 0.0);
     if (T.neutral.var || T.neutral.redCard || T.neutral.yellowCard) flare(0, 0.5);
   }
   _drawSpot() {
@@ -1047,11 +1334,12 @@ export class BattleEngine {
   }
 
   // ---------- input ----------
-  // Orbit-first camera controls:
-  //   one finger / left-drag  → orbit (horizontal = yaw, vertical = tilt)
-  //   two fingers             → pan (move together) + pinch zoom
+  // Orbit camera:
+  //   one finger / left-drag   → orbit: horizontal spins the world (yaw), vertical raises/lowers
+  //                              the eye (tilt — drag DOWN for top-down, UP for a low angle)
+  //   two fingers              → pan + pinch zoom
   //   mouse right/shift/ctrl-drag → pan · wheel → zoom · alt+wheel → yaw
-  //   double-tap / double-click   → recenter everything
+  //   double-tap / double-click   → recenter to the default framing
   _bindInput() {
     const cv = this.cv, ptrs = new Map();
     let lastTap = 0, pinch0 = 0, zoom0 = 1;
@@ -1076,21 +1364,21 @@ export class BattleEngine {
         if (panning) { this.cam.x += dx; this.cam.y += dy; }
         else {
           this.cam.rot += dx * 0.0055;
-          this.cam.tilt = clamp(this.cam.tilt + dy * 0.0028, 0.05, 0.95);
+          this.cam.tilt = clamp(this.cam.tilt - dy * 0.0028, 0.15, 0.85);
         }
       } else if (ptrs.size === 2) {
-        // both fingers moving together = pan (each event carries one finger's delta → half weight)
+        // fingers moving together = pan (each event carries one finger's delta → half weight)
         this.cam.x += dx / 2; this.cam.y += dy / 2;
         const [a, b] = [...ptrs.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch0 > 0) this.cam.zoom = clamp(zoom0 * d / pinch0, 0.5, 2.6);
+        if (pinch0 > 0) this.cam.zoom = clamp(zoom0 * d / pinch0, 0.55, 2.6);
       }
     };
     const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
     const wheel = e => {
       e.preventDefault();
       if (e.altKey) { this.cam.rot += e.deltaY * 0.0022; return; } // alt+wheel rotates
-      this.cam.zoom = clamp(this.cam.zoom * Math.pow(1.0012, -e.deltaY), 0.5, 2.6);
+      this.cam.zoom = clamp(this.cam.zoom * Math.pow(1.0012, -e.deltaY), 0.55, 2.6);
     };
     const ctxm = e => e.preventDefault();
     cv.addEventListener('pointerdown', down); cv.addEventListener('pointermove', move);
