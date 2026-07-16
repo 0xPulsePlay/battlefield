@@ -14,7 +14,7 @@
     useEffect(() => { window.BF?.fog(t.fog); }, [t.fog]);
     const fire = (e) => () => window.BF?.inject(e);
     return (
-      <TweaksPanel>
+      <TweaksPanel title="War Room">
         <TweakSection label="Goals" />
         <TweakButton label="Goal — England" onClick={fire({ kind: 'goal', side: 'home' })} />
         <TweakButton label="Goal — Argentina" onClick={fire({ kind: 'goal', side: 'away' })} />

@@ -200,6 +200,11 @@ function TweaksPanel({ title = 'Tweaks', children }) {
   const dragRef = React.useRef(null);
   const offsetRef = React.useRef({ x: 16, y: 16 });
   const PAD = 16;
+  // Standalone mode: outside the Claude Design editor there is no host to post
+  // __activate_edit_mode, so the panel gets its own floating launcher instead.
+  const standalone = React.useMemo(() => {
+    try { return window.self === window.top; } catch { return false; }
+  }, []);
 
   const clampToViewport = React.useCallback(() => {
     const panel = dragRef.current;
@@ -240,7 +245,7 @@ function TweaksPanel({ title = 'Tweaks', children }) {
 
   const dismiss = () => {
     setOpen(false);
-    window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+    if (!standalone) window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
   };
 
   const onDragStart = (e) => {
@@ -265,7 +270,21 @@ function TweaksPanel({ title = 'Tweaks', children }) {
     window.addEventListener('mouseup', up);
   };
 
-  if (!open) return null;
+  if (!open) {
+    if (!standalone) return null;
+    return (
+      <button aria-label={'Open ' + title} onClick={() => setOpen(true)}
+        style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 10px)', right: 12,
+          zIndex: 2147483646, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 11px',
+          borderRadius: 6, background: 'rgba(8,12,9,.82)', border: '1px solid rgba(200,210,190,.25)',
+          color: '#e2e7dc', font: '600 9.5px/1 "IBM Plex Mono",ui-monospace,monospace',
+          letterSpacing: '1.5px', cursor: 'pointer',
+          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+        <i style={{ width: 5, height: 5, borderRadius: '50%', background: '#d3ab48', display: 'inline-block' }}></i>
+        {title.toUpperCase()}
+      </button>
+    );
+  }
   return (
     <>
       <style>{__TWEAKS_STYLE}</style>
