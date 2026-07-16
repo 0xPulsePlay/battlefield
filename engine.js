@@ -18,11 +18,11 @@ function rgba(c, a) { const [r, g, b] = rgbv(c); return `rgba(${r},${g},${b},${a
 
 const COL = {
   stage: '#060a07',
-  homeEarth: '#4a7036', awayEarth: '#8a7b49',
-  edge: '#2a3320', skirt: '#2a2114', skirtSide: '#1a1409', strata: '#463824',
-  scorch: '#1c1409', sand: '#a68f5c', wire: '#7d7d72', trench: '#2c2413',
-  water: '#2e6fb2', waterDeep: '#1d4f86', shore: '#b5a26b', road: '#8d8168', roadEdge: '#6f6450',
-  tree: '#2f5c33', tree2: '#3f7a42', trunk: '#4a3b28', smoke: '#9a9e96', flash: '#ffd98c', gold: '#d3ab48',
+  homeEarth: '#6b9c40', awayEarth: '#a8924f',
+  edge: '#2a3320', skirt: '#3d2f19', skirtSide: '#261d0e', strata: '#5c4a2e',
+  scorch: '#241a0c', sand: '#c2a86b', wire: '#8a8a7e', trench: '#3a2f18',
+  water: '#2f6fd6', waterDeep: '#1f56b0', shore: '#cdb377', road: '#8f7350', roadEdge: '#6d573c',
+  tree: '#2f6b33', tree2: '#46934a', trunk: '#5a4630', smoke: '#9a9e96', flash: '#ffd98c', gold: '#d3ab48',
   home: { main: '#f0f2f5', deep: '#2c4066', accent: '#c03a4e', tint: '#7086ab', tracer: '#f0e0c0' },
   away: { main: '#8fc4ec', deep: '#4f83ad', accent: '#d9b02a', tint: '#6fa3c4', tracer: '#ffe9a8' },
 };
@@ -38,7 +38,7 @@ export class BattleEngine {
     this.names = opts.names || { home: 'ENGLAND', away: 'ARGENTINA' };
     this.reduced = opts.reducedMotion ?? (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     this.portrait = true;
-    this.cam = { zoom: 1, x: 0, y: 0, rot: 0 };
+    this.cam = { zoom: 1, x: 0, y: 0, rot: 0, tilt: 0.4 };
     this._cr = 1; this._sr = 0; this._shx = 0; this._shy = 0;
     this.shake = 0; this.flashOv = 0;
     this.now = 0; this.budget = 1; this.fpsE = 60;
@@ -78,7 +78,7 @@ export class BattleEngine {
     this.k = Math.min(W, H) / 430;
     this._vig = null;
   }
-  recenter() { this.cam = { zoom: 1, x: 0, y: 0, rot: 0 }; }
+  recenter() { this.cam = { zoom: 1, x: 0, y: 0, rot: 0, tilt: 0.4 }; }
 
   // world rotation (around board centre) — cached sin/cos set each frame
   _rot(u, v) { const w = (v - 0.5) * 2; return { u: u * this._cr - w * this._sr, w: u * this._sr + w * this._cr }; }
@@ -86,7 +86,8 @@ export class BattleEngine {
   _hgt(u, v) {
     const a = Math.sin(u * 3.9 + 1.7) * Math.cos(v * 7.1 - 0.5)
       + Math.sin(u * 8.3 + v * 4.4 - 2.1) * 0.5
-      + Math.cos(u * 1.9 + v * 12.7) * 0.35;
+      + Math.cos(u * 1.9 + v * 12.7) * 0.35
+      + Math.sin(u * 15.7 - 1.1) * Math.sin(v * 21.3 + 0.7) * 0.18;
     const camp = clamp((Math.min(v - 0.015, 0.985 - v)) / 0.12, 0, 1);
     const rim = clamp((1.04 - Math.abs(u)) / 0.22, 0, 1);
     let m = 0.7 * (0.2 + 0.8 * camp) * (0.35 + 0.65 * rim);
@@ -96,8 +97,9 @@ export class BattleEngine {
   _p(u, v, z = 0) {
     const c = this.cam, R = this._rot(u, v), ru = R.u, rv = R.w / 2 + 0.5;
     const zz = z + this._hgt(u, v);
-    if (this.portrait) return { x: this.cx + (ru * this.su + (rv - 0.5) * this.sh) * c.zoom + c.x + this._shx, y: this.cy + ((0.5 - rv) * this.sv - zz * this.sz) * c.zoom + c.y + this._shy };
-    return { x: this.cx + ((rv - 0.5) * this.sv + ru * this.sh) * c.zoom + c.x + this._shx, y: this.cy + (ru * this.su - zz * this.sz) * c.zoom + c.y + this._shy };
+    const sv = this._svE ?? this.sv, sz = this._szE ?? this.sz, sh = this._shE ?? this.sh;
+    if (this.portrait) return { x: this.cx + (ru * this.su + (rv - 0.5) * sh) * c.zoom + c.x + this._shx, y: this.cy + ((0.5 - rv) * sv - zz * sz) * c.zoom + c.y + this._shy };
+    return { x: this.cx + ((rv - 0.5) * sv + ru * sh) * c.zoom + c.x + this._shx, y: this.cy + (ru * this.su - zz * sz) * c.zoom + c.y + this._shy };
   }
   _depth(u, v) { const R = this._rot(u, v), rv = R.w / 2 + 0.5; return this.portrait ? (1 - rv) + R.u * 0.02 : (R.u + 1) * 0.5 + rv * 0.02; }
   _ribbon(u0, u1, v0, v1, fill, steps = 16) {
@@ -613,11 +615,16 @@ export class BattleEngine {
     if (!W) return;
     this._shx = (Math.random() - 0.5) * this.shake; this._shy = (Math.random() - 0.5) * this.shake;
     this._cr = Math.cos(this.cam.rot); this._sr = Math.sin(this.cam.rot);
+    // camera tilt → effective projection scales (top-down at 0 … low dramatic angle at 1)
+    const tl = clamp(this.cam.tilt, 0.05, 0.95);
+    this._svE = this.sv * (1.30 - 0.75 * tl);
+    this._szE = this.sz * (0.2 + 2.0 * tl);
+    this._shE = this.sh * (0.5 + 1.25 * tl);
     ctx.fillStyle = COL.stage; ctx.fillRect(0, 0, W, H);
     // ground glow
     const gc = this._p(0, 0.5, 0);
     let gr = ctx.createRadialGradient(gc.x, gc.y, 10, gc.x, gc.y, Math.max(W, H) * 0.62);
-    gr.addColorStop(0, 'rgba(48,70,44,0.6)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    gr.addColorStop(0, 'rgba(70,102,58,0.72)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
     this._drawBoard();
     // drawables
@@ -636,7 +643,7 @@ export class BattleEngine {
     // vignette
     if (!this._vig) {
       this._vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.36, W / 2, H / 2, Math.max(W, H) * 0.75);
-      this._vig.addColorStop(0, 'rgba(0,0,0,0)'); this._vig.addColorStop(1, 'rgba(2,4,2,0.52)');
+      this._vig.addColorStop(0, 'rgba(0,0,0,0)'); this._vig.addColorStop(1, 'rgba(2,4,2,0.42)');
     }
     ctx.fillStyle = this._vig; ctx.fillRect(0, 0, W, H);
   }
@@ -660,16 +667,24 @@ export class BattleEngine {
 
   _terrain() {
     if (this._terr) return this._terr;
-    const NU = 22, NV = 30, cells = [];
-    const eu = 0.012, ev = 0.0045;
-    for (let iv = 0; iv < NV; iv++) for (let iu = 0; iu < NU; iu++) {
-      const u0 = -1 + 2 * iu / NU, u1 = -1 + 2 * (iu + 1) / NU, v0 = iv / NV, v1 = (iv + 1) / NV;
-      const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
-      const dhdu = this._hgt(u1, vc) - this._hgt(u0, vc), dhdv = this._hgt(uc, v1) - this._hgt(uc, v0);
-      const hsh = Math.abs(Math.sin(iu * 12.9898 + iv * 78.233) * 43758.5453) % 1;
-      cells.push({ u0e: u0 - eu, u1e: u1 + eu, v0e: v0 - ev, v1e: v1 + ev, uc, vc, lf: clamp((0.93 + hsh * 0.14) * (1 + dhdv * 1.15 - dhdu * 0.45), 0.64, 1.36), d: 0 });
-    }
-    return (this._terr = { cells });
+    // Smooth relief: light comes from a fixed-epsilon slope gradient (resolution-independent),
+    // with only a whisper of per-cell variation — the smoothness lives in the height field.
+    const build = (NU, NV) => {
+      const cells = [], eu = (2 / NU) * 0.2, ev = (1 / NV) * 0.2, g = 0.045;
+      for (let iv = 0; iv < NV; iv++) for (let iu = 0; iu < NU; iu++) {
+        const u0 = -1 + 2 * iu / NU, u1 = -1 + 2 * (iu + 1) / NU, v0 = iv / NV, v1 = (iv + 1) / NV;
+        const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
+        const dhdu = this._hgt(uc + g, vc) - this._hgt(uc - g, vc);
+        const dhdv = this._hgt(uc, vc + g) - this._hgt(uc, vc - g);
+        const hsh = Math.abs(Math.sin(iu * 12.9898 + iv * 78.233) * 43758.5453) % 1;
+        cells.push({
+          u0e: u0 - eu, u1e: u1 + eu, v0e: v0 - ev, v1e: v1 + ev, uc, vc,
+          lf: clamp((0.985 + hsh * 0.03) * (1 + dhdv * 1.55 - dhdu * 0.55), 0.68, 1.33), d: 0,
+        });
+      }
+      return cells;
+    };
+    return (this._terr = { fine: build(54, 72), coarse: build(24, 32) });
   }
   _skirt() {
     const ctx = this.ctx, D = 3.4, S = 14;
@@ -723,14 +738,20 @@ export class BattleEngine {
     const t = this.tintOv, F = this.F;
     const win = this.victory ? COL[this.victory.side].tint : null;
     // territory base colors — lush home green vs sun-baked away khaki, deepened by probability
-    let hCol = mix(COL.homeEarth, COL.home.tint, 0.08 + 0.3 * (F.prob.home / 100));
-    let aCol = mix(COL.awayEarth, COL.away.tint, 0.05 + 0.22 * (F.prob.away / 100));
+    let hCol = mix(COL.homeEarth, COL.home.tint, 0.04 + 0.18 * (F.prob.home / 100));
+    let aCol = mix(COL.awayEarth, COL.away.tint, 0.03 + 0.13 * (F.prob.away / 100));
     if (win) { hCol = mix(hCol, win, t * 0.75); aCol = mix(aCol, win, t * 0.75); }
     // extruded edge (real thickness), then relief mesh far-to-near
     this._skirt();
-    const cells = this._terrain().cells;
-    for (const c of cells) c.d = this._depth(c.uc, c.vc);
-    cells.sort((x, y) => x.d - y.d);
+    const T = this._terrain();
+    const cells = this.budget < 0.65 ? T.coarse : T.fine;
+    // depth order only changes with yaw / layout — cache the sort
+    const sortKey = (this.portrait ? 'P' : 'D') + ':' + Math.round(this.cam.rot / 0.04);
+    if (cells.sortKey !== sortKey) {
+      for (const c of cells) c.d = this._depth(c.uc, c.vc);
+      cells.sort((x, y) => x.d - y.d);
+      cells.sortKey = sortKey;
+    }
     for (const c of cells) {
       const base = c.vc < this.frontE ? hCol : aCol;
       this._poly([this._p(c.u0e, c.v0e), this._p(c.u1e, c.v0e), this._p(c.u1e, c.v1e), this._p(c.u0e, c.v1e)], shade(base, c.lf));
@@ -1026,10 +1047,14 @@ export class BattleEngine {
   }
 
   // ---------- input ----------
+  // Orbit-first camera controls:
+  //   one finger / left-drag  → orbit (horizontal = yaw, vertical = tilt)
+  //   two fingers             → pan (move together) + pinch zoom
+  //   mouse right/shift/ctrl-drag → pan · wheel → zoom · alt+wheel → yaw
+  //   double-tap / double-click   → recenter everything
   _bindInput() {
     const cv = this.cv, ptrs = new Map();
-    let lastTap = 0, pinch0 = 0, zoom0 = 1, twist0 = 0, rot0 = 0;
-    const angOf = () => { const [a, b] = [...ptrs.values()]; return Math.atan2(b.y - a.y, b.x - a.x); };
+    let lastTap = 0, pinch0 = 0, zoom0 = 1;
     const down = e => {
       cv.setPointerCapture?.(e.pointerId);
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1040,31 +1065,32 @@ export class BattleEngine {
       } else if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
         pinch0 = Math.hypot(a.x - b.x, a.y - b.y); zoom0 = this.cam.zoom;
-        twist0 = angOf(); rot0 = this.cam.rot;
       }
     };
     const move = e => {
       const p = ptrs.get(e.pointerId); if (!p) return;
-      if (ptrs.size === 1) {
-        const dx = e.clientX - p.x, dy = e.clientY - p.y;
-        // mouse: right-drag / shift-drag / ctrl-drag rotates; plain drag pans. touch: one finger pans.
-        const rotating = e.pointerType === 'mouse' && ((e.buttons & 2) || e.shiftKey || e.ctrlKey || e.metaKey);
-        if (rotating) this.cam.rot += dx * 0.006;
-        else { this.cam.x += dx; this.cam.y += dy; }
-      }
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
       p.x = e.clientX; p.y = e.clientY;
-      if (ptrs.size === 2) {
+      if (ptrs.size === 1) {
+        const panning = e.pointerType === 'mouse' && ((e.buttons & 2) || e.shiftKey || e.ctrlKey || e.metaKey);
+        if (panning) { this.cam.x += dx; this.cam.y += dy; }
+        else {
+          this.cam.rot += dx * 0.0055;
+          this.cam.tilt = clamp(this.cam.tilt + dy * 0.0028, 0.05, 0.95);
+        }
+      } else if (ptrs.size === 2) {
+        // both fingers moving together = pan (each event carries one finger's delta → half weight)
+        this.cam.x += dx / 2; this.cam.y += dy / 2;
         const [a, b] = [...ptrs.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch0 > 0) this.cam.zoom = clamp(zoom0 * d / pinch0, 0.55, 2.4);
-        this.cam.rot = rot0 + (angOf() - twist0); // two-finger twist rotates
+        if (pinch0 > 0) this.cam.zoom = clamp(zoom0 * d / pinch0, 0.5, 2.6);
       }
     };
-    const up = e => ptrs.delete(e.pointerId);
+    const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
     const wheel = e => {
       e.preventDefault();
       if (e.altKey) { this.cam.rot += e.deltaY * 0.0022; return; } // alt+wheel rotates
-      this.cam.zoom = clamp(this.cam.zoom * Math.pow(1.0012, -e.deltaY), 0.55, 2.4);
+      this.cam.zoom = clamp(this.cam.zoom * Math.pow(1.0012, -e.deltaY), 0.5, 2.6);
     };
     const ctxm = e => e.preventDefault();
     cv.addEventListener('pointerdown', down); cv.addEventListener('pointermove', move);

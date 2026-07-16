@@ -25,13 +25,13 @@ browser for the command-console layout (≥1024px wide).
 
 | Input | Action |
 |---|---|
-| Drag (one finger / mouse) | Pan |
+| Drag (one finger / left mouse) | **Orbit** — horizontal rotates (yaw), vertical tilts the camera angle |
+| Two-finger drag | Pan |
 | Pinch | Zoom |
-| Two-finger twist | Rotate |
-| Shift-drag, Ctrl-drag, or right-drag (mouse) | Rotate |
-| Alt + scroll wheel | Rotate |
+| Shift-drag, Ctrl-drag, or right-drag (mouse) | Pan |
 | Scroll wheel | Zoom |
-| Double-tap / double-click | Recenter (resets pan, zoom, rotation) |
+| Alt + scroll wheel | Rotate |
+| Double-tap / double-click | Recenter (resets pan, zoom, rotation, tilt) |
 | Bottom sheet tabs | WAR FEED (event ticker) / STATS (live match stats) |
 | ❚❚ / 1× / SND | Pause · replay speed · sound toggle |
 
