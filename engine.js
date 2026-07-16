@@ -39,6 +39,8 @@ const CAMP_V = { home: -0.06, away: 1.06 };
 const DIR = { home: 1, away: -1 }; // +v = toward away
 // The battle zone is a ghosted stadium: chalk pitch, goals behind the camps, floodlights.
 const PITCH = { u: 1.08, v0: -0.14, v1: 1.14, boxW: 0.62, boxD: 0.2, goalW: 0.3, goalD: 0.07, circleR: 0.13 };
+// The world is a finite acre of land — a floating diorama with a cut-earth skirt on its edges.
+const BOARD = { u: 1.72, v0: -0.42, v1: 1.42 };
 
 export class BattleEngine {
   constructor(canvas, opts = {}) {
@@ -51,7 +53,7 @@ export class BattleEngine {
     this.names = opts.names || { home: this.T.home.name, away: this.T.away.name };
     this.reduced = opts.reducedMotion ?? (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     this.portrait = true;
-    this.cam = { zoom: 0.82, x: 0, y: 0, rot: 0, tilt: 0.45 };
+    this.cam = { zoom: 0.8, x: 0, y: 0, rot: -0.55, tilt: 0.34 };
     this._cr = 1; this._sr = 0; this._shx = 0; this._shy = 0;
     this.shake = 0; this.flashOv = 0;
     this.now = 0; this.budget = 1; this.fpsE = 60;
@@ -83,26 +85,40 @@ export class BattleEngine {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this._layout();
   }
-  setMode(portrait) { this.portrait = portrait; if (this.W) this._layout(); }
+  setMode(portrait) { const ch = this.portrait !== portrait; this.portrait = portrait; if (this.W) { this._layout(); if (ch) this.recenter(); } }
   _layout() {
     const { W, H } = this;
     if (this.portrait) { this.su = W * 0.44; this.sv = H * 0.50; this.sh = W * 0.09; this.sz = H * 0.0085; this.cx = W / 2; this.cy = H * 0.545; }
     else { this.sv = W * 0.58; this.su = H * 0.30; this.sh = W * 0.028; this.sz = H * 0.012; this.cx = W / 2; this.cy = H * 0.52; }
     this.k = Math.min(W, H) / 430;
     this._vig = null;
+    if (!this._framed) { this._framed = true; this.recenter(); }
   }
-  recenter() { this.cam = { zoom: this.portrait ? 0.82 : 0.95, x: 0, y: 0, rot: 0, tilt: 0.45 }; }
+  // Default framing: the camera rests at the south-east corner of England's side — the world
+  // yawed so that corner is nearest, tilt low enough to stretch the horizon — then zoom/pan
+  // are solved so the ENTIRE pitch (all four corners, goals, crossbars) fits the usable
+  // viewport between the HUD bars.
+  recenter() {
+    this.cam = { zoom: 0.8, x: 0, y: 0, rot: -0.55, tilt: 0.34 };
+    if (!this.W) return;
+    this._cr = Math.cos(this.cam.rot); this._sr = Math.sin(this.cam.rot);
+    this._applyTilt();
+    const pts = [];
+    for (const [u, v] of [[-1.16, -0.26], [1.16, -0.26], [-1.16, 1.26], [1.16, 1.26], [0, -0.3], [0, 1.3]]) pts.push(this._p(u, v, 0));
+    pts.push(this._p(0, -0.2, 2.6), this._p(0, 1.2, 2.6)); // crossbars
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+    const pad = this.opts.framePad || (this.portrait ? { l: 14, r: 14, t: 190, b: 120 } : { l: 340, r: 396, t: 132, b: 96 });
+    const aw = this.W - pad.l - pad.r, ah = this.H - pad.t - pad.b;
+    const z = clamp(Math.min(aw / (x1 - x0), ah / (y1 - y0)) * 0.96, 0.42, 2.2);
+    this.cam.zoom = z;
+    this.cam.x = pad.l + aw / 2 - (this.cx + ((x0 + x1) / 2 - this.cx) * z);
+    this.cam.y = pad.t + ah / 2 - (this.cy + ((y0 + y1) / 2 - this.cy) * z);
+  }
 
   // world rotation (around board centre) — cached sin/cos set each frame
   _rot(u, v) { const w = (v - 0.5) * 2; return { u: u * this._cr - w * this._sr, w: u * this._sr + w * this._cr }; }
-  // how deep into the encircling highlands a point is (0 = arena floor, 1 = high range)
-  _mtnF(u, v) {
-    const du = Math.max(0, Math.abs(u) - 1.55), dv2 = Math.max(0, Math.abs(v - 0.5) - 0.88);
-    const d = Math.hypot(du, dv2 * 1.6);
-    return d <= 0.1 ? 0 : Math.min(1, (d - 0.1) / 0.95);
-  }
-  // gentle rolling relief on the arena floor; mountains rise with distance from the pitch,
-  // slope-limited so they can never climb into the view of the battlefield itself
+  // gentle rolling relief on the plot; flattened around the camps so buildings sit level
   _hgt(u, v) {
     const a = Math.sin(u * 3.9 + 1.7) * Math.cos(v * 7.1 - 0.5)
       + Math.sin(u * 8.3 + v * 4.4 - 2.1) * 0.5
@@ -113,24 +129,33 @@ export class BattleEngine {
       const dCamp = Math.min(Math.abs(v - CAMP_V.home), Math.abs(v - CAMP_V.away));
       m *= 0.2 + 0.8 * clamp(dCamp / 0.1, 0, 1);
     }
-    let h = a * m;
-    const mf = this._mtnF(u, v);
-    if (mf > 0) {
-      const ridge = Math.sin(u * 1.7 + 2.3) * Math.cos(v * 2.6 - 1.1)
-        + Math.sin(u * 3.1 - v * 2.2 + 0.8) * 0.6
-        + Math.sin(u * 6.3 + v * 5.1) * 0.3;
-      h += (1.25 + ridge) * mf * mf * 3.6;
-    }
-    return h;
+    return a * m;
   }
+  // Tilt foreshortens the DEPTH axis — whichever ground axis maps to screen-vertical
+  // (v in portrait, u in landscape). The screen-horizontal scale never changes with tilt,
+  // so orbiting up/down reads as a camera angle, not a stretch.
   _p(u, v, z = 0) {
     const c = this.cam, R = this._rot(u, v), ru = R.u, rv = R.w / 2 + 0.5;
     const zz = z + this._hgt(u, v);
-    const sv = this._svE ?? this.sv, sz = this._szE ?? this.sz, sh = this._shE ?? this.sh;
-    if (this.portrait) return { x: this.cx + (ru * this.su + (rv - 0.5) * sh) * c.zoom + c.x + this._shx, y: this.cy + ((0.5 - rv) * sv - zz * sz) * c.zoom + c.y + this._shy };
-    return { x: this.cx + ((rv - 0.5) * sv + ru * sh) * c.zoom + c.x + this._shx, y: this.cy + (ru * this.su - zz * sz) * c.zoom + c.y + this._shy };
+    const sz = this._szE ?? this.sz, sh = this._shE ?? this.sh;
+    if (this.portrait) {
+      const sv = this._svE ?? this.sv;
+      return { x: this.cx + (ru * this.su + (rv - 0.5) * sh) * c.zoom + c.x + this._shx, y: this.cy + ((0.5 - rv) * sv - zz * sz) * c.zoom + c.y + this._shy };
+    }
+    const su = this._suE ?? this.su;
+    return { x: this.cx + ((rv - 0.5) * this.sv + ru * sh) * c.zoom + c.x + this._shx, y: this.cy + (ru * su - zz * sz) * c.zoom + c.y + this._shy };
   }
   _depth(u, v) { const R = this._rot(u, v), rv = R.w / 2 + 0.5; return this.portrait ? (1 - rv) + R.u * 0.02 : (R.u + 1) * 0.5 + rv * 0.02; }
+  // camera tilt (z-axis orbit): low dramatic angle at ~0.15, high overview at ~0.85
+  _applyTilt() {
+    const tl = clamp(this.cam.tilt, 0.15, 0.85);
+    const tf = 1.30 - 0.75 * tl; // depth foreshortening
+    if (this.portrait) { this._svE = this.sv * tf; this._suE = this.su; }
+    else { this._suE = this.su * tf; this._svE = this.sv; }
+    this._szE = this.sz * (0.25 + 1.9 * tl);
+    this._shE = this.sh * (0.5 + 1.25 * tl);
+    this._spriteV = 0.55 + 0.85 * tl; // fixed-pixel sprites lean with the camera too
+  }
   _ribbon(u0, u1, v0, v1, fill, steps = 16) {
     const pts = [];
     for (let i = 0; i <= steps; i++) pts.push(this._p(u0 + (u1 - u0) * i / steps, v0, 0));
@@ -258,7 +283,7 @@ export class BattleEngine {
     this.now += dt;
     const fps = 1 / Math.max(dt, 1e-3); this.fpsE = this.fpsE * 0.95 + fps * 0.05;
     if (this.fpsE < 48) this.budget = Math.max(0.35, this.budget - 0.01); else if (this.fpsE > 56) this.budget = Math.min(1, this.budget + 0.005);
-    // bounded exploration: the landscape is endless but the arena stays reachable
+    // bounded exploration: the plot can never be panned out of reach
     if (this.su) {
       const mx = this.su * this.cam.zoom * 1.2, my = (this.portrait ? this.sv : this.su * 2.2) * this.cam.zoom * 0.8;
       this.cam.x = clamp(this.cam.x, -mx, mx);
@@ -275,6 +300,13 @@ export class BattleEngine {
     for (const b of (this.fogBlobs || (this.fogBlobs = Array.from({ length: 9 }, () => ({ u: rnd(-1.6, 1.6), v: rnd(-0.2, 1.2), r: rnd(0.3, 0.6), vu: rnd(0.015, 0.045) * (Math.random() < 0.5 ? -1 : 1) }))))) {
       b.u += b.vu * dt; if (b.u > 1.5) b.u = -1.5; if (b.u < -1.5) b.u = 1.5;
     }
+    // living front: a wandering pressure lane + possession/zone-driven bulge (see _wobble)
+    this._laneT = (this._laneT ?? 0) - dt;
+    if (this._laneT <= 0) { this._laneT = rnd(3.5, 7); this._laneTgt = rnd(-0.55, 0.55); }
+    this._laneU = (this._laneU ?? 0) + ((this._laneTgt ?? 0) - (this._laneU ?? 0)) * (1 - Math.exp(-dt / 2.2));
+    const zAmp = { safe: 0.006, attack: 0.026, danger: 0.048, box: 0.06 }[this.F.possession.zone] || 0;
+    const bTgt = this.F.market.suspended ? 0 : zAmp * DIR[this.F.possession.side];
+    this._bulgeAmp = (this._bulgeAmp ?? 0) + (bTgt - this._bulgeAmp) * (1 - Math.exp(-dt / 1.1));
     // trench re-dig
     if (!this.victory && Math.abs(this.frontE - this.trench.v) > 0.03 && this.now - this.trench.dugT > 4) this._trench(this.frontE);
     // scars fade slightly
@@ -643,12 +675,7 @@ export class BattleEngine {
     if (!W) return;
     this._shx = (Math.random() - 0.5) * this.shake; this._shy = (Math.random() - 0.5) * this.shake;
     this._cr = Math.cos(this.cam.rot); this._sr = Math.sin(this.cam.rot);
-    // camera tilt (z-axis orbit): low dramatic angle at 1, high overview at 0
-    const tl = clamp(this.cam.tilt, 0.15, 0.85);
-    this._svE = this.sv * (1.30 - 0.75 * tl);
-    this._szE = this.sz * (0.25 + 1.9 * tl);
-    this._shE = this.sh * (0.5 + 1.25 * tl);
-    this._spriteV = 0.55 + 0.85 * tl; // fixed-pixel sprites lean with the camera too
+    this._applyTilt();
     ctx.fillStyle = COL.stage; ctx.fillRect(0, 0, W, H);
     // ground glow
     const gc = this._p(0, 0.5, 0);
@@ -712,36 +739,30 @@ export class BattleEngine {
       const dhdu = this._hgt(uc + g, vc) - this._hgt(uc - g, vc);
       const dhdv = this._hgt(uc, vc + g) - this._hgt(uc, vc - g);
       const hsh = this._hash(cx * 8 + iu, cy * 8 + iv);
-      // highlands get a baked rock/snow colour; arena cells stay territory-coloured
-      const mf = this._mtnF(uc, vc);
-      let col = null;
-      if (mf > 0.05) {
-        const hz = this._hgt(uc, vc);
-        col = mix(mix('#7fa054', '#8b8478', Math.min(1, mf * 1.15)), '#e9edf1', clamp((hz - 4.4) / 2.4, 0, 0.85));
-      }
       // the pitch itself gets mowing stripes; everything outside reads as rougher ground
       const inP = Math.abs(uc) <= PITCH.u && vc >= PITCH.v0 && vc <= PITCH.v1;
       let lf = clamp((0.99 + hsh * 0.02) * (1 + dhdv * 1.05 - dhdu * 0.4), 0.7, 1.3);
       if (inP) {
         const band = Math.floor((vc - PITCH.v0) / ((PITCH.v1 - PITCH.v0) / 16));
-        lf *= (band % 2 ? 0.952 : 1.05);
+        lf *= (band % 2 ? 0.94 : 1.06);
       }
-      cells.push({ u0e: u0 - eu, u1e: u1 + eu, v0e: v0 - ev, v1e: v1 + ev, uc, vc, col, inP, lf, d: 0 });
+      cells.push({ u0e: u0 - eu, u1e: u1 + eu, v0e: v0 - ev, v1e: v1 + ev, uc, vc, inP, lf, d: 0 });
     }
-    // decor: forests fill the world OUTSIDE the pitch; the arena itself stays clear
+    // decor: copses fill the plot OUTSIDE the pitch; the arena itself stays clear
     const inPitch = (u, v) => Math.abs(u) < PITCH.u + 0.08 && v > PITCH.v0 - 0.06 && v < PITCH.v1 + 0.06;
+    const offBoard = (u, v) => Math.abs(u) > BOARD.u - 0.05 || v < BOARD.v0 + 0.03 || v > BOARD.v1 - 0.03;
     const nTree = (h => h < 0.42 ? 0 : h < 0.78 ? 1 : h < 0.94 ? 2 : 3)(this._hash(cx * 3 + 1, cy * 7 + 2));
     for (let i = 0; i < nTree; i++) {
       const u = ou + this._hash(cx + i * 17, cy * 13 + i) * WU;
       const v = ov + this._hash(cx * 5 - i, cy + i * 29) * WV;
-      if (inPitch(u, v) || this._mtnF(u, v) > 0.42) continue;
+      if (inPitch(u, v) || offBoard(u, v)) continue;
       // country-flavoured foliage: broadleaf oaks on England's half, taller firs on Argentina's
       const bias = v < 0.5 ? 0.72 : 0.3;
       trees.push({ u, v, s: 0.65 + this._hash(cx + i, cy - i) * 0.7, kind: this._hash(cx - i * 7, cy + i * 3) < bias ? 'round' : 'fir' });
     }
     if (this._hash(cx * 11, cy * 17) < 0.45) {
       const u = ou + this._hash(cx * 11 + 1, cy - 5) * WU, v = ov + this._hash(cx - 3, cy * 17 + 1) * WV;
-      patches.push({ u, v, r: 0.02 + this._hash(cx + 2, cy + 9) * 0.03, f: 0.85 + this._hash(cx * 2 - 1, cy * 4 + 1) * 0.27 });
+      if (!offBoard(u, v)) patches.push({ u, v, r: 0.02 + this._hash(cx + 2, cy + 9) * 0.03, f: 0.85 + this._hash(cx * 2 - 1, cy * 4 + 1) * 0.27 });
     }
     ch = { cells, trees, patches };
     map.set(key, ch);
@@ -754,11 +775,11 @@ export class BattleEngine {
       const c = this.cam;
       let ru, rv;
       if (this.portrait) {
-        rv = 0.5 - (y - this.cy - c.y) / (this.sv * c.zoom);
-        ru = ((x - this.cx - c.x) / c.zoom - (rv - 0.5) * this.sh) / this.su;
+        rv = 0.5 - (y - this.cy - c.y) / ((this._svE ?? this.sv) * c.zoom);
+        ru = ((x - this.cx - c.x) / c.zoom - (rv - 0.5) * (this._shE ?? this.sh)) / this.su;
       } else {
-        ru = (y - this.cy - c.y) / (this.su * c.zoom);
-        rv = ((x - this.cx - c.x) / c.zoom - ru * this.sh) / this.sv + 0.5;
+        ru = (y - this.cy - c.y) / ((this._suE ?? this.su) * c.zoom);
+        rv = ((x - this.cx - c.x) / c.zoom - ru * (this._shE ?? this.sh)) / this.sv + 0.5;
       }
       const w = (rv - 0.5) * 2;
       const u = ru * this._cr + w * this._sr;
@@ -784,15 +805,15 @@ export class BattleEngine {
     const seg = (u0, v0, u1, v1, n = 14) => { const pts = []; for (let i = 0; i <= n; i++) pts.push([u0 + (u1 - u0) * i / n, v0 + (v1 - v0) * i / n]); return pts; };
     const U = PITCH.u, v0 = PITCH.v0, v1 = PITCH.v1;
     // boundary glow pass — the warzone edge reads from any distance
-    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
     line(seg(-U, v0, U, v0), 6); line(seg(-U, v1, U, v1), 6);
     line(seg(-U, v0, -U, v1, 26), 6); line(seg(U, v0, U, v1, 26), 6);
     // crisp boundary
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.62)';
     line(seg(-U, v0, U, v0), 1.5); line(seg(-U, v1, U, v1), 1.5);
     line(seg(-U, v0, -U, v1, 26), 1.5); line(seg(U, v0, U, v1, 26), 1.5);
     // interior markings
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.44)';
     line(seg(-U, 0.5, U, 0.5, 20));
     const circ = [];
     for (let i = 0; i <= 44; i++) { const a = i / 44 * Math.PI * 2; circ.push([Math.cos(a) * PITCH.circleR * 2.2, 0.5 + Math.sin(a) * PITCH.circleR]); }
@@ -807,14 +828,23 @@ export class BattleEngine {
       line(seg(-PITCH.goalW, ve + d * PITCH.goalD, PITCH.goalW, ve + d * PITCH.goalD, 10));
     }
   }
-  // The front line is two-part: a PERMANENT outer trench at the world's midpoint running
-  // endlessly beyond the pitch, and the MOVING inner trench inside the pitch; a smooth
-  // interpolation joins them just outside the touchlines. This draws a hard visual
-  // boundary around the warzone itself.
+  // The front line is two-part: a PERMANENT outer trench at the world's midpoint beyond the
+  // pitch, and the MOVING inner trench inside it; a smooth interpolation joins them just
+  // outside the touchlines. The inner line is never straight — a living wave: slow ambient
+  // meander, a broad momentum lean, and a pressure bulge that wanders with the danger lane.
+  _wobble(u) {
+    const t = this.now;
+    let w = Math.sin(u * 3.1 + t * 0.45) * 0.020
+      + Math.sin(u * 6.7 - t * 0.28 + 1.7) * 0.012
+      + Math.sin(u * 11.3 + t * 0.7) * 0.006;
+    w += (this.F.momentum.home - this.F.momentum.away) * 0.03 * Math.cos(u * 1.1);
+    w += (this._bulgeAmp || 0) * Math.exp(-Math.pow(u - (this._laneU || 0), 2) / 0.18);
+    return w;
+  }
   _trenchV(u, vInner) {
     const t = clamp((Math.abs(u) - (PITCH.u - 0.06)) / 0.42, 0, 1);
     const s = t * t * (3 - 2 * t);
-    return lerp(vInner, 0.5, s);
+    return lerp(clamp(vInner + this._wobble(u), 0.07, 0.93), 0.5, s);
   }
   // filled band that follows a v-path across the visible width
   _band(u0, u1, vAt, half, fill, steps = 44) {
@@ -906,6 +936,35 @@ export class BattleEngine {
       ctx.beginPath(); ctx.moveTo(t.x - w1 / 2, t.y); ctx.lineTo(t.x + w1 / 2, t.y); ctx.lineTo(t.x, t.y - 1.6 * k); ctx.closePath(); ctx.fill();
     }
   }
+  // cut-earth skirt on the camera-facing edges of the plot: a soil layer over bedrock,
+  // top edge following the terrain, bottom edge dead level — the diorama looks finished
+  _skirt() {
+    const BU = BOARD.u, V0 = BOARD.v0, V1 = BOARD.v1, D = 3.4;
+    const edges = [
+      { a: [-BU, V0], b: [BU, V0], out: [0, -0.14], sh: 0.8 },
+      { a: [BU, V0], b: [BU, V1], out: [0.14, 0], sh: 0.62 },
+      { a: [BU, V1], b: [-BU, V1], out: [0, 0.14], sh: 0.72 },
+      { a: [-BU, V1], b: [-BU, V0], out: [-0.14, 0], sh: 0.55 },
+    ];
+    const ctx = this.ctx;
+    for (const e of edges) {
+      const mu = (e.a[0] + e.b[0]) / 2, mv = (e.a[1] + e.b[1]) / 2;
+      const pOut = this._p(mu + e.out[0], mv + e.out[1], 0), pIn = this._p(mu - e.out[0], mv - e.out[1], 0);
+      if (pOut.y <= pIn.y + 1) continue; // wall faces away from the camera
+      const N = 26, top = [], soil = [], bot = [];
+      for (let i = 0; i <= N; i++) {
+        const u = lerp(e.a[0], e.b[0], i / N), v = lerp(e.a[1], e.b[1], i / N);
+        const h = this._hgt(u, v);
+        top.push(this._p(u, v, 0));
+        soil.push(this._p(u, v, -1.1 - h));
+        bot.push(this._p(u, v, -D - h));
+      }
+      this._poly([...top, ...bot.slice().reverse()], shade('#2e2517', e.sh));
+      this._poly([...top, ...soil.slice().reverse()], shade('#4d3d27', e.sh));
+      ctx.strokeStyle = 'rgba(16,12,6,0.5)'; ctx.lineWidth = Math.max(1, this.k * this.cam.zoom);
+      ctx.beginPath(); top.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    }
+  }
   _drawBoard() {
     const t = this.tintOv, F = this.F;
     const win = this.victory ? this.T[this.victory.side].tint : null;
@@ -913,15 +972,16 @@ export class BattleEngine {
     let hCol = mix(COL.homeEarth, this.T.home.tint, 0.04 + 0.18 * (F.prob.home / 100));
     let aCol = mix(COL.awayEarth, this.T.away.tint, 0.03 + 0.13 * (F.prob.away / 100));
     if (win) { hCol = mix(hCol, win, t * 0.75); aCol = mix(aCol, win, t * 0.75); }
-    // visible world rect → chunks; the landscape is endless, only what's on screen is drawn
+    // visible world rect ∩ the finite plot → chunks; the diorama's cut-earth skirt goes first
     const A = this._aabb = this._viewAABB();
+    this._skirt();
     const maps = this._chunks || (this._chunks = {});
     let cs = this.cam.zoom < 0.8 ? 3 : this.cam.zoom < 1.2 ? 2 : this.cam.zoom < 1.8 ? 1.5 : 1;
     if (this.budget < 0.65) cs = Math.max(cs, 2);
     const map = maps[cs] || (maps[cs] = new Map());
     const WU = 8 * (2 / 54), WV = 8 * (1 / 72);
-    const cx0 = Math.floor(A.uMin / WU), cx1 = Math.floor(A.uMax / WU);
-    const cy0 = Math.floor(A.vMin / WV), cy1 = Math.floor(A.vMax / WV);
+    const cx0 = Math.max(Math.floor(A.uMin / WU), Math.floor(-BOARD.u / WU)), cx1 = Math.min(Math.floor(A.uMax / WU), Math.floor(BOARD.u / WU));
+    const cy0 = Math.max(Math.floor(A.vMin / WV), Math.floor(BOARD.v0 / WV)), cy1 = Math.min(Math.floor(A.vMax / WV), Math.floor(BOARD.v1 / WV));
     const cells = [], deco = this._deco = { trees: [], patches: [] };
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const ch = this._chunk(map, cx, cy, cs);
@@ -931,11 +991,14 @@ export class BattleEngine {
     for (const c of cells) c.d = this._depth(c.uc, c.vc);
     cells.sort((x, y) => x.d - y.d);
     // ground outside the pitch is rougher and dimmer — the warzone itself stays vivid
-    const hOut = mix(hCol, '#6f7857', 0.35), aOut = mix(aCol, '#6f7857', 0.35);
+    const hOut = mix(hCol, '#5f684b', 0.48), aOut = mix(aCol, '#5f684b', 0.48);
     for (const c of cells) {
+      const u0 = Math.max(c.u0e, -BOARD.u), u1 = Math.min(c.u1e, BOARD.u);
+      const v0 = Math.max(c.v0e, BOARD.v0), v1 = Math.min(c.v1e, BOARD.v1);
+      if (u0 >= u1 || v0 >= v1) continue;
       const homeSide = c.vc < this._trenchV(c.uc, this.frontE);
-      const base = c.col || (homeSide ? (c.inP ? hCol : hOut) : (c.inP ? aCol : aOut));
-      this._poly([this._p(c.u0e, c.v0e), this._p(c.u1e, c.v0e), this._p(c.u1e, c.v1e), this._p(c.u0e, c.v1e)], shade(base, c.lf));
+      const base = homeSide ? (c.inP ? hCol : hOut) : (c.inP ? aCol : aOut);
+      this._poly([this._p(u0, v0), this._p(u1, v0), this._p(u1, v1), this._p(u0, v1)], shade(base, c.lf));
     }
     const ctx = this.ctx;
     // patches
@@ -947,30 +1010,31 @@ export class BattleEngine {
     this._pitch();
     // no-man's-land — follows the two-part trench: moving inside the pitch,
     // interpolating out to the permanent midline beyond the touchlines
+    const bu0 = Math.max(A.uMin, -BOARD.u), bu1 = Math.min(A.uMax, BOARD.u);
     const nmlAt = (u) => this._trenchV(u, this.frontE);
-    ctx.globalAlpha = 0.4; this._band(A.uMin, A.uMax, nmlAt, 0.05, COL.scorch);
-    ctx.globalAlpha = 0.5; this._band(A.uMin, A.uMax, nmlAt, 0.022, COL.scorch);
+    ctx.globalAlpha = 0.4; this._band(bu0, bu1, nmlAt, 0.05, COL.scorch);
+    ctx.globalAlpha = 0.5; this._band(bu0, bu1, nmlAt, 0.022, COL.scorch);
     ctx.globalAlpha = 1;
     // scars — historical inner-trench positions, pitch only
     for (const s of this.scars) { ctx.globalAlpha = s.a; this._ribbon(-PITCH.u, PITCH.u, s.v - 0.006, s.v + 0.006, '#100d07', 18); ctx.globalAlpha = 1; }
     // decals + craters
     for (const dd of this.decals) { const c = this._p(dd.u, dd.v); ctx.globalAlpha = dd.a; ctx.fillStyle = '#0c0a06'; ctx.beginPath(); ctx.ellipse(c.x, c.y, dd.r * this.su * this.cam.zoom, dd.r * this.sv * this.cam.zoom * 0.5, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
     for (const cr of this.craters) { const c = this._p(cr.u, cr.v); ctx.globalAlpha = cr.a; ctx.fillStyle = '#14100a'; ctx.beginPath(); ctx.ellipse(c.x, c.y, cr.r * this.su * this.cam.zoom, cr.r * this.sv * this.cam.zoom * 0.5, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
-    // trench band + wire — endless fortification following the two-part path
+    // trench band + wire — fortification following the two-part path, edge to edge of the plot
     const tv = this.trench.v;
     const tAt = (u) => this._trenchV(u, tv);
-    this._band(A.uMin, A.uMax, tAt, 0.011, COL.trench);
-    this._band(A.uMin, A.uMax, tAt, 0.003, '#0d0a05');
+    this._band(bu0, bu1, tAt, 0.011, COL.trench);
+    this._band(bu0, bu1, tAt, 0.003, '#0d0a05');
     ctx.strokeStyle = COL.wire; ctx.lineWidth = Math.max(0.6, this.k * 0.7);
     for (const off of [-0.02, 0.02]) {
       ctx.beginPath();
       let first = true;
-      for (let u = A.uMin; u <= A.uMax; u += 0.03) {
+      for (let u = bu0; u <= bu1; u += 0.03) {
         const p = this._p(u, tAt(u) + off + (Math.abs(u * 100) % 2 < 1 ? 0.004 : -0.004), 0.28);
         first ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); first = false;
       }
       ctx.stroke();
-      for (let u = Math.ceil(A.uMin / 0.09) * 0.09; u <= A.uMax; u += 0.09) { const a = this._p(u, tAt(u) + off, 0), b = this._p(u, tAt(u) + off, 0.3); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      for (let u = Math.ceil(bu0 / 0.09) * 0.09; u <= bu1; u += 0.09) { const a = this._p(u, tAt(u) + off, 0), b = this._p(u, tAt(u) + off, 0.3); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
     }
     if (this.armistice) for (let u = -0.85; u <= 0.85; u += 0.12) this._box(u, tAt(u), 0.006, 0.004, 0.7, '#d8d8d0');
   }
@@ -980,7 +1044,7 @@ export class BattleEngine {
     const A = this._aabb || { uMin: -1.4, uMax: 1.4, vMin: -0.1, vMax: 1.1 };
     // sandbags — deterministic lattice following the two-part trench path
     const tv2 = this.trench.v;
-    for (let i = Math.ceil(A.uMin / 0.055); i * 0.055 <= A.uMax; i++) {
+    for (let i = Math.ceil(Math.max(A.uMin, -BOARD.u) / 0.055); i * 0.055 <= Math.min(A.uMax, BOARD.u); i++) {
       const bu = i * 0.055 + (this._hash(i, 7) - 0.5) * 0.024;
       const bv = this._trenchV(bu, tv2) + (this._hash(i, 13) < 0.5 ? 1 : -1) * 0.016;
       const s = 0.8 + this._hash(i, 3) * 0.4;
@@ -1371,14 +1435,14 @@ export class BattleEngine {
         this.cam.x += dx / 2; this.cam.y += dy / 2;
         const [a, b] = [...ptrs.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch0 > 0) this.cam.zoom = clamp(zoom0 * d / pinch0, 0.55, 2.6);
+        if (pinch0 > 0) this.cam.zoom = clamp(zoom0 * d / pinch0, 0.42, 2.6);
       }
     };
     const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
     const wheel = e => {
       e.preventDefault();
       if (e.altKey) { this.cam.rot += e.deltaY * 0.0022; return; } // alt+wheel rotates
-      this.cam.zoom = clamp(this.cam.zoom * Math.pow(1.0012, -e.deltaY), 0.55, 2.6);
+      this.cam.zoom = clamp(this.cam.zoom * Math.pow(1.0012, -e.deltaY), 0.42, 2.6);
     };
     const ctxm = e => e.preventDefault();
     cv.addEventListener('pointerdown', down); cv.addEventListener('pointermove', move);

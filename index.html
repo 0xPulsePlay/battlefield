@@ -33,10 +33,10 @@ a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
       <div style="margin-top:3px; font-size:11px; font-weight:500; letter-spacing:1.5px; color:rgba(210,220,205,.55);">{{ clockText }}</div>
       <div style="margin:10px auto 0; max-width:360px; display:flex; gap:7px;">
         <sc-for list="{{ probBoxes }}" as="bx" hint-placeholder-count="3">
-          <div style="flex:1; background:rgba(8,12,9,.78); border:1px solid rgba(200,210,190,.18); border-top:2px solid {{ bx.accent }}; border-radius:8px; padding:7px 4px 8px; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">
+          <div style="flex:1; position:relative; background:rgba(8,12,9,.78); border:1px solid rgba(200,210,190,.18); border-top:2px solid {{ bx.accent }}; border-radius:8px; padding:5px 4px 6px; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">
             <div style="font-size:8.5px; font-weight:600; letter-spacing:2px; color:rgba(210,220,205,.6);">{{ bx.lbl }}</div>
-            <div style="margin-top:2px; font-size:16px; font-weight:700; color:#f4f6f0; white-space:nowrap;">{{ bx.val }} <span style="font-size:10px; color: {{ bx.ac }};">{{ bx.arrow }}</span></div>
-            <span style="display:inline-block; margin-top:2px; font-size:7.5px; font-weight:700; letter-spacing:1px; padding:1.5px 5px; border-radius:3px; color:#f2dcdc; background: {{ bx.badgeBg }};">{{ bx.badge }}</span>
+            <div style="margin-top:1px; display:flex; align-items:baseline; justify-content:center; font-size:16px; font-weight:700; color:#f4f6f0; white-space:nowrap;"><span style="flex:0 0 13px;"></span><span>{{ bx.val }}</span><span style="flex:0 0 13px; font-size:10px; text-align:right; color: {{ bx.ac }};">{{ bx.arrow }}</span></div>
+            <span style="position:absolute; top:3px; right:4px; font-size:7px; font-weight:700; letter-spacing:1px; padding:1.5px 4px; border-radius:3px; color:#f2dcdc; background: {{ bx.badgeBg }};">{{ bx.badge }}</span>
           </div>
         </sc-for>
       </div>
@@ -116,10 +116,10 @@ a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
       <div style="margin-top:6px; font-size:26px; font-weight:600; letter-spacing:3px; color:#f0f3ec;">{{ scoreText }}</div>
       <div style="margin:9px auto 0; width:430px; display:flex; gap:8px;">
         <sc-for list="{{ probBoxes }}" as="bx" hint-placeholder-count="3">
-          <div style="flex:1; background:rgba(8,12,9,.78); border:1px solid rgba(200,210,190,.18); border-top:2px solid {{ bx.accent }}; border-radius:8px; padding:8px 6px 9px; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">
+          <div style="flex:1; position:relative; background:rgba(8,12,9,.78); border:1px solid rgba(200,210,190,.18); border-top:2px solid {{ bx.accent }}; border-radius:8px; padding:6px 6px 7px; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">
             <div style="font-size:8.5px; font-weight:600; letter-spacing:2px; color:rgba(210,220,205,.6);">{{ bx.lbl }}</div>
-            <div style="margin-top:2px; font-size:17px; font-weight:700; color:#f4f6f0; white-space:nowrap;">{{ bx.val }} <span style="font-size:11px; color: {{ bx.ac }};">{{ bx.arrow }}</span></div>
-            <span style="display:inline-block; margin-top:2px; font-size:7.5px; font-weight:700; letter-spacing:1px; padding:1.5px 5px; border-radius:3px; color:#f2dcdc; background: {{ bx.badgeBg }};">{{ bx.badge }}</span>
+            <div style="margin-top:1px; display:flex; align-items:baseline; justify-content:center; font-size:17px; font-weight:700; color:#f4f6f0; white-space:nowrap;"><span style="flex:0 0 14px;"></span><span>{{ bx.val }}</span><span style="flex:0 0 14px; font-size:11px; text-align:right; color: {{ bx.ac }};">{{ bx.arrow }}</span></div>
+            <span style="position:absolute; top:3px; right:4px; font-size:7px; font-weight:700; letter-spacing:1px; padding:1.5px 4px; border-radius:3px; color:#f2dcdc; background: {{ bx.badgeBg }};">{{ bx.badge }}</span>
           </div>
         </sc-for>
       </div>
@@ -179,12 +179,11 @@ a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
 
   <!-- ====== BANNER / REPLAY OVERLAYS ====== -->
   <sc-if value="{{ bannerShow }}" hint-placeholder-val="{{ false }}">
-    <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:45;">
-      <div style="position:absolute; inset:0; background:radial-gradient(ellipse 62% 44% at 50% 47%, rgba(3,5,3,.58), rgba(3,5,3,.26) 55%, rgba(0,0,0,0) 76%); animation:fadeIn .3s both;"></div>
-      <div style="position:relative; text-align:center; animation:bannerIn .55s cubic-bezier(.2,.9,.3,1) both; padding:20px 44px 22px; margin:0 20px; background:rgba(7,11,8,.72); border:1px solid rgba(210,220,200,.24); border-radius:12px; backdrop-filter:blur(10px) saturate(1.15); -webkit-backdrop-filter:blur(10px) saturate(1.15); box-shadow:0 18px 60px rgba(0,0,0,.6);">
-        <div style="font-family:'Barlow Condensed',sans-serif; font-size:44px; font-weight:700; letter-spacing:4px; color:#f6f8f1; text-transform:uppercase;">{{ bannerTitle }}</div>
-        <div style="width:64px; height:3px; margin:10px auto; background: {{ bannerAccent }};"></div>
-        <div style="font-size:12px; font-weight:600; letter-spacing:3px; color:rgba(230,235,224,.9);">{{ bannerSub }}</div>
+    <!-- compact strip in the upper third — the battlefield stays visible behind it -->
+    <div style="position:absolute; top:26%; left:0; right:0; display:flex; justify-content:center; pointer-events:none; z-index:45;">
+      <div style="position:relative; text-align:center; animation:bannerIn .55s cubic-bezier(.2,.9,.3,1) both; padding:11px 28px 12px; margin:0 20px; background:rgba(7,11,8,.5); border:1px solid rgba(210,220,200,.22); border-left:3px solid {{ bannerAccent }}; border-radius:10px; backdrop-filter:blur(5px) saturate(1.1); -webkit-backdrop-filter:blur(5px) saturate(1.1); box-shadow:0 10px 34px rgba(0,0,0,.4);">
+        <div style="font-family:'Barlow Condensed',sans-serif; font-size:27px; font-weight:700; letter-spacing:4px; color:#f6f8f1; text-transform:uppercase; text-shadow:0 1px 8px rgba(0,0,0,.7);">{{ bannerTitle }}</div>
+        <div style="margin-top:2px; font-size:10.5px; font-weight:600; letter-spacing:3px; color:rgba(232,237,226,.92); text-shadow:0 1px 6px rgba(0,0,0,.7);">{{ bannerSub }}</div>
       </div>
     </div>
   </sc-if>
