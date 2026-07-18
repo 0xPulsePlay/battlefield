@@ -125,7 +125,7 @@
           {all == null && <div style={{ textAlign: 'center', color: DIM, fontSize: 11, padding: 30 }}>Loading fixtures…</div>}
           {all && rows.length === 0 && <div style={{ textAlign: 'center', color: DIM, fontSize: 11, padding: 30 }}>No {seg} fixtures.</div>}
           {rows.map((f) => (
-            <button key={f.fixtureId} onClick={() => { B().open(f.fixtureId, f.status === 'live' ? 'live' : 'replay'); onClose(); }}
+            <button key={f.fixtureId} onClick={() => { B().open(f.fixtureId, f.status === 'played' ? 'replay' : 'live'); onClose(); }}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px', marginBottom: 4, borderRadius: 10, cursor: 'pointer', textAlign: 'left', border: `1px solid ${LINE}`, background: 'rgba(255,255,255,.02)', color: INK }}>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                 <Flag name={f.participant1} w={22} />

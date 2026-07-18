@@ -12,20 +12,27 @@ and bulges toward whichever side is under pressure. Team palettes are configurab
 (`opts.teams` on the engine) so any two nations can fight. The camera rests at the south-east
 corner of England's side with the whole pitch framed in view.
 
-**Current phase: UI experience.** The app runs on a synthetic match driver that reproduces
-measured TxLINE data behavior (tick cadence, suspension durations, the real semifinal's
-28.4% → 69.7% goal jump). The real-data bridge plugs in later without touching the renderer —
-see *Architecture*.
+**Current phase: real TxLINE data + consumer product.** The synthetic driver has been replaced by
+a real-data bridge (`bridge/`) that folds live TxLINE market state into the same
+`BattleFrame`/`BattleEvent` contract, so **all 116 corpus matches are replayable battles** driven by
+real de-margined 1X2 probabilities, real scores and events, with true match-clock semantics. On top
+sits the consumer layer: fixture picker, replay scrubber, tap-to-inspect with a **real Merkle proof
+walk**, predict-along, share/poster, and devnet wallet. The synthetic driver remains as an offline
+fallback (`?mode=synthetic`). The renderer (`engine.js`) and the data contract are unchanged. See
+`STATUS-FOR-MIKAIL.md` for the full picture and `bridge/` for the mapping.
 
 ## Run it
 
 ```bash
-npm install
-npm run dev        # → http://localhost:5173  (--host serves on LAN for phone testing)
+npm install                    # Vite + the two @txline SDK tarballs
+npm run dev                    # → http://localhost:4400  (LAN URL printed for phone testing)
+npm test                       # node --test bridge/  → 36 hermetic tests
+
+# deep-links: ?fixture=<id>&mode=replay|live|synthetic&t=<ts>&dur=<seconds>
 ```
 
-Open on a phone (portrait — the primary target) via the LAN URL Vite prints, or in a desktop
-browser for the command-console layout (≥1024px wide).
+Requires the TxLINE engine on `:3001` (Vite proxies `/v1` → it, same-origin, no CORS). Open on a
+phone (portrait — the primary target) via the LAN URL, or a desktop ≥1024px for the command console.
 
 ## Controls
 
@@ -38,9 +45,14 @@ browser for the command-console layout (≥1024px wide).
 | Scroll wheel | Zoom |
 | Alt + scroll wheel | Rotate |
 | Double-tap / double-click | Recenter (resets pan, zoom, rotation, tilt) |
+| MATCHES (top-left) | Fixture picker — all 116 battles, segmented live/upcoming/finished, flags, search |
+| VERIFY (top-right) | Inspect the current tick → walk its Merkle proof to the on-chain root |
+| Scrubber (bottom) | Seek anywhere · play/pause · 1×/2×/4×/8× cinematic fast-forward |
+| ⚔ RAID INCOMING | Predict-along prompt during danger spells — scored vs the market |
+| Share / wallet (top-right) | Replay deep-link + poster PNG · devnet sign-in |
 | FEED / STATS (bottom-left) | Centered overlays: war feed ticker · live match stats |
 | WAR ROOM (bottom-right) | Dev tweaks panel — fire goals, threats, fog, momentum, finale |
-| ❚❚ / 1× / SND | Pause · replay speed · sound toggle |
+| SND (bottom-left) | Sound toggle (audio off by default) |
 
 On desktop (≥1024px) the feed and stats live in permanent side columns instead of overlays.
 
@@ -51,10 +63,14 @@ scripted timeline and tweaks panel use.
 ## Architecture
 
 ```
-driver.js    Synthetic data source. Emits BattleFrame (~4Hz) + BattleEvent through the exact
-             contract a real feed will use. THIS is the file the real-data bridge replaces —
-             see BRIDGE-NOTES.md for the researched field-by-field mapping onto the ingestion
-             engine's /v1/stream/fixtures/:id composite SSE.
+bridge/      THE REAL-DATA BRIDGE (new). mapping.js (pure StatusId/1X2-Pct/possession/action
+             mappers) + replay-source.js (ts-native match-clock replay model, real prob path,
+             honest suspension gaps) + real-driver.js (RealMatchDriver — same {onFrame,onEvent}
+             + method surface as the synthetic driver; virtual-clock replay + seek + live SSE)
+             + teams.js (nation army palettes + SVG flags). 36 hermetic tests.
+app/         session.js (openSession: synthetic|replay|live) + console.jsx (consumer overlay:
+             picker, scrubber, inspect+Merkle-proof, predict-along, share, wallet — via window.BATTLE).
+driver.js    Synthetic data source (UNCHANGED) — kept as the offline/demo fallback (?mode=synthetic).
 engine.js    Pure canvas renderer: finite skirted diorama (chunked, cached terrain), real-
              proportioned pitch, living two-part trench (ambient wave + momentum lean +
              possession-pressure bulge), camps, armies, raids, ambient warfare, cinematics,
