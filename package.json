@@ -11,5 +11,9 @@
   },
   "devDependencies": {
     "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "@txline/client-sdk": "file:../.nightshift/vendor/txline-client-sdk-0.1.0.tgz",
+    "@txline/verify": "file:../.nightshift/vendor/txline-verify-0.1.0.tgz"
   }
 }
