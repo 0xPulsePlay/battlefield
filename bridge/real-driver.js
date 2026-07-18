@@ -107,6 +107,8 @@ export class RealMatchDriver {
     this._suspStarted = new Set();
     this._suspReopened = new Set();
     this._threat = { home: {}, away: {}, neutral: {} };
+    this._threatLatch = { home: null, away: null }; // {until, kind} so flares are visible at any speed
+    this._predictAnnounced = new Set();
     this.forcePoss = null;
     this.possession = { side: 'home', zone: 'safe' };
     this._possT = rnd(4, 8);
@@ -137,6 +139,7 @@ export class RealMatchDriver {
 
       for (const e of this.model.eventsBetween(this.prevTs, this.ts)) this._fireModelEvent(e);
       this._handleSuspensionBoundaries();
+      this._latchThreats();
       this._advance(dTs, dtReal);
 
       if (this.ts >= this.model.endTs && !this._firedFinale) {
@@ -213,9 +216,30 @@ export class RealMatchDriver {
     }
   }
 
-  _threatObj(sd, modelThreat) {
-    const o = { ...(modelThreat && modelThreat[sd]) };
-    for (const k in this._threat[sd]) if (this._threat[sd][k] > this.ts) o[k] = true;
+  // latch pre-goal threat windows so a flare stays lit for ~1.4s of real time even
+  // when fast-forward steps clean over its (short) match-time window.
+  _latchThreats() {
+    if (!this.model || !this.model.threatWindows) return;
+    const lo = Math.min(this.prevTs, this.ts), hi = Math.max(this.prevTs, this.ts);
+    for (const w of this.model.threatWindows) {
+      if (w.start < hi && w.end > lo) {
+        this._threatLatch[w.side] = { until: Date.now() + 1400, kind: w.kind === 'corner' ? 'corner' : 'goal' };
+        const id = `${w.side}:${w.start}`;
+        if (w.prompt && !this._predictAnnounced.has(id) && !this.finished) {
+          this._predictAnnounced.add(id);
+          // carry the ground-truth outcome so predict-along scores deterministically at any speed
+          this._emit({ kind: 'predict_prompt', side: w.side, outcome: w.outcome, windowId: id, momentum: { ...this.mom } });
+        }
+      }
+    }
+  }
+  _threatObj(sd) {
+    const o = {};
+    const mt = this.model && this.model.threatAt ? this.model.threatAt(this.ts) : null; // exact (covers pause)
+    if (mt && mt[sd]) { if (mt[sd].goal) o.goal = true; if (mt[sd].corner) o.corner = true; }
+    const l = this._threatLatch && this._threatLatch[sd];                              // latched (covers fast-forward)
+    if (l && l.until > Date.now()) o[l.kind] = true;
+    for (const k in this._threat[sd]) if (this._threat[sd][k] > this.ts) o[k] = true;  // injected (panel/live)
     return o;
   }
 
@@ -238,7 +262,7 @@ export class RealMatchDriver {
       front,
       possession: this.finished ? { side: null, zone: 'safe' } : { ...this.possession },
       momentum: { home: Math.round(this.mom.home * 100) / 100, away: Math.round(this.mom.away * 100) / 100 },
-      threat: (() => { const mt = (!susp && this.model && this.model.threatAt) ? this.model.threatAt(this.ts) : null; return { home: this._threatObj('home', mt), away: this._threatObj('away', mt), neutral: this._threatObj('neutral', mt) }; })(),
+      threat: (() => { const t = { home: this._threatObj('home'), away: this._threatObj('away'), neutral: this._threatObj('neutral') }; if (susp || this.finished) { delete t.home.goal; delete t.away.goal; } return t; })(),
       market: { suspended: susp, darkForMs: susp ? (this.fogForced ? 60000 : this.darkMs) : 0 },
     };
   }

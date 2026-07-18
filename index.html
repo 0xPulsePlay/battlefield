@@ -280,6 +280,7 @@ class Component extends DCLogic {
     };
     // window.BATTLE: app-level controls + data for the consumer shell + console
     this._subs = new Set();
+    this._evSubs = new Set();
     this._fixturesCache = null;
     window.BATTLE = {
       open: (fx, m) => this._openFixture({ fixtureId: fx, mode: m || this.state.replayMode }),
@@ -295,6 +296,7 @@ class Component extends DCLogic {
         progress: this.state.progress, fixtureId: this.state.fixtureId, ident: this.ident, frame: this._lastF, model: this.model }),
       baseUrl: () => this._baseUrl,
       subscribe: (cb) => { this._subs.add(cb); return () => this._subs.delete(cb); },
+      onEvent: (cb) => { this._evSubs.add(cb); return () => this._evSubs.delete(cb); },
       // data helpers (all same-origin via the /v1 proxy)
       fixtures: async () => {
         if (this._fixturesCache) return this._fixturesCache;
@@ -448,6 +450,12 @@ class Component extends DCLogic {
   }
 
   _event(e) {
+    // app-internal events (not for the renderer or feed) — fan out to consumer overlay
+    if (e.kind === 'predict_prompt' || e.kind === 'seek') {
+      if (this._evSubs) for (const cb of this._evSubs) { try { cb(e); } catch (_) {} }
+      return;
+    }
+    if (this._evSubs) for (const cb of this._evSubs) { try { cb(e); } catch (_) {} }
     this.engine && this.engine.event(e);
     const HA = this.state.homeAbbr, AA = this.state.awayAbbr;
     const nm = (s) => s === 'home' ? this.state.homeName : this.state.awayName;

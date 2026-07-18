@@ -198,13 +198,24 @@ export function buildReplayModel(fixtureResp, oddsResp) {
   // threat flares (ts): the ~22s of pressure BEFORE a goal (the raid), plus a
   // brief flare on each on-target/woodwork shot. Drives the diorama's threat
   // chips and the predict-along war-drum prompt.
+  // `outcome` is what actually happens after the flare — the ground truth the
+  // predict-along prompt is scored against (goal-flares resolve 'goal', shot-flares
+  // resolve 'nothing'). `prompt` marks windows worth interrupting the viewer for.
   const sideOf = (participant) => (participant === 1) === p1Home ? 'home' : 'away';
   const threatWindows = [];
-  for (const g of goals) threatWindows.push({ start: g.ts - 22000, end: g.ts, side: sideOf(g.participant), kind: 'goal' });
+  for (const g of goals) threatWindows.push({ start: g.ts - 22000, end: g.ts, side: sideOf(g.participant), kind: 'goal', outcome: 'goal', prompt: true });
   for (const e of tl.events || []) {
     if (e.action === 'shot') {
       const oc = String(e.detail || '').toLowerCase();
-      if (oc.includes('target') && !oc.includes('off') || oc.includes('wood')) threatWindows.push({ start: e.ts, end: e.ts + 6000, side: sideOf(e.participant), kind: 'goal' });
+      const onTgt = (oc.includes('target') && !oc.includes('off')) || oc.includes('wood');
+      if (onTgt) {
+        const leadsToGoal = goals.some((g) => g.ts > e.ts && g.ts - e.ts < 8000 && sideOf(g.participant) === sideOf(e.participant));
+        threatWindows.push({ start: e.ts - 6000, end: e.ts, side: sideOf(e.participant), kind: 'goal', outcome: leadsToGoal ? 'goal' : 'nothing', prompt: !leadsToGoal });
+      }
+    }
+    if (e.action === 'corner') {
+      const leadsToGoal = goals.some((g) => g.ts > e.ts && g.ts - e.ts < 12000 && sideOf(g.participant) === sideOf(e.participant));
+      threatWindows.push({ start: e.ts - 5000, end: e.ts, side: sideOf(e.participant), kind: 'corner', outcome: leadsToGoal ? 'goal' : 'corner', prompt: true });
     }
   }
   threatWindows.sort((a, b) => a.start - b.start);
@@ -235,7 +246,7 @@ export function buildReplayModel(fixtureResp, oddsResp) {
     // ── query API (ts) ───────────────────────────────────────────────────
     threatAt(ts) {
       const t = { home: {}, away: {}, neutral: {} };
-      for (const w of threatWindows) if (ts >= w.start && ts < w.end) t[w.side][w.kind] = true;
+      for (const w of threatWindows) if (ts >= w.start && ts < w.end) t[w.side][w.kind === 'corner' ? 'corner' : 'goal'] = true;
       return t;
     },
     inSuspension(ts) {

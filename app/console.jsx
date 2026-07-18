@@ -234,7 +234,7 @@
             </div>
           </div>
         ))}
-        <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.4)', paddingTop: 10 }}>@txline/verify math · oracle {(oc.programId || '').slice(0, 8)}… · read-only, no wallet, no gas</div>
+        <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.4)', paddingTop: 10 }}>TxLINE scores proof · verified against Solana oracle {(oc.programId || '').slice(0, 8)}… · read-only, no wallet, no gas</div>
       </div>
     );
   }
@@ -316,51 +316,36 @@
   // During a danger spell a war-drum prompt asks goal / corner / nothing; the pick
   // is log-scored against the market's implied probability for that outcome.
   function PredictAlong({ wallet }) {
-    const snap = useSnap();
-    const f = snap.frame;
-    const [prompt, setPrompt] = useState(null);     // {side, marketProb, id}
-    const [result, setResult] = useState(null);     // {label, pts}
-    const cool = useRef(0); const armed = useRef(null); const lastScore = useRef(null);
+    const [prompt, setPrompt] = useState(null);     // {side, outcome, marketProb, id}
+    const [result, setResult] = useState(null);     // {label, pts, total, correct}
+    const cool = useRef(0); const promptRef = useRef(null); const frameRef = useRef(null);
     const board = useRef(loadBoard());
 
+    useEffect(() => { if (B().subscribe) return B().subscribe((s) => { frameRef.current = s.frame; }); }, []);
     useEffect(() => {
-      if (!f) return;
-      const now = Date.now();
-      const T = f.threat || { home: {}, away: {}, neutral: {} };
-      const dangerSide = T.home.goal ? 'home' : T.away.goal ? 'away' : null;
-      // resolve an armed prediction when the market reopens or a goal lands
-      if (armed.current) {
-        const a = armed.current;
-        const scored = f.score[a.side] > a.score0;
-        const settled = scored || (now - a.at > 14000);
-        if (settled) {
-          const happened = scored ? 'goal' : (f.market.suspended ? null : 'nothing');
-          if (happened) { finalize(a, happened); armed.current = null; }
-        }
-      }
-      // arm a new prompt on a fresh danger spell
-      if (dangerSide && !prompt && !armed.current && now > cool.current) {
-        const mp = a2p(f, dangerSide); // implied P(goal in this spell) proxy from momentum+prob
-        setPrompt({ side: dangerSide, marketProb: mp, id: now, score0: f.score[dangerSide] });
-        cool.current = now + 26000;
-      }
-    }, [f && f.threat && (f.threat.home.goal || f.threat.away.goal), f && f.score && (f.score.home + f.score.away)]);
+      if (!B().onEvent) return;
+      return B().onEvent((e) => {
+        if (e.kind !== 'predict_prompt') return;
+        if (promptRef.current || Date.now() < cool.current) return;
+        const mp = e.momentum ? a2pMom(e.momentum[e.side]) : (frameRef.current ? a2p(frameRef.current, e.side) : 0.3);
+        const p = { side: e.side, outcome: e.outcome, marketProb: mp, id: Date.now() };
+        promptRef.current = p; setPrompt(p);
+        cool.current = Date.now() + 16000;
+      });
+    }, []);
 
     const answer = (choice) => {
-      const p = prompt; setPrompt(null);
-      armed.current = { ...p, choice, at: Date.now() };
-      lastScore.current = f.score[p.side];
-    };
-    const finalize = (a, outcome) => {
-      const correct = a.choice === outcome;
-      // log-score vs market: reward beating the market's implied probability
-      const pMarket = outcome === 'goal' ? a.marketProb : (1 - a.marketProb);
-      const pts = correct ? Math.round((1 + Math.log2(Math.max(0.02, pMarket) / 0.5) * -1 + 2) * 10) : -8;
-      const label = correct ? `RIGHT — ${outcome.toUpperCase()}` : `WRONG — it was ${outcome}`;
-      const gain = correct ? Math.max(4, pts) : -8;
+      const p = promptRef.current; promptRef.current = null; setPrompt(null);
+      if (!p) return;
+      const outcome = p.outcome, correct = choice === outcome;
+      // log-score vs the market's implied probability — a correct call the market
+      // rated unlikely is worth more (Beat-the-Market scoring).
+      const pMarket = outcome === 'goal' ? p.marketProb : outcome === 'corner' ? 0.15 : (1 - p.marketProb);
+      const gain = correct ? Math.max(4, Math.round(-Math.log2(Math.max(0.03, pMarket)) * 10)) : -8;
       board.current = addScore(board.current, wallet, gain);
-      setResult({ label, pts: gain, correct });
-      setTimeout(() => setResult(null), 4200);
+      const total = board.current[wallet ? wallet.slice(0, 6) : 'you'] || 0;
+      setResult({ label: correct ? `RIGHT — ${outcome.toUpperCase()}` : `WRONG — it was ${outcome.toUpperCase()}`, pts: gain, total, correct });
+      setTimeout(() => setResult(null), 4600);
     };
 
     if (!prompt && !result) return null;
@@ -378,16 +363,20 @@
           </div>
         )}
         {result && (
-          <div style={{ width: 'min(420px,100%)', background: result.correct ? 'rgba(10,30,14,.95)' : 'rgba(30,12,12,.95)', border: `1px solid ${result.correct ? 'rgba(126,217,146,.5)' : 'rgba(232,138,138,.5)'}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'sheetUp .3s both' }}>
-            <span style={{ fontFamily: COND, fontSize: 16, fontWeight: 700, letterSpacing: 1, color: result.correct ? '#a8e8ba' : '#f0b0b0' }}>{result.label}</span>
-            <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, color: result.correct ? '#7ed992' : '#e88a8a' }}>{result.pts > 0 ? '+' : ''}{result.pts}</span>
+          <div style={{ width: 'min(420px,100%)', background: result.correct ? 'rgba(10,30,14,.95)' : 'rgba(30,12,12,.95)', border: `1px solid ${result.correct ? 'rgba(126,217,146,.5)' : 'rgba(232,138,138,.5)'}`, borderRadius: 14, padding: '11px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'sheetUp .3s both' }}>
+            <div>
+              <div style={{ fontFamily: COND, fontSize: 16, fontWeight: 700, letterSpacing: 1, color: result.correct ? '#a8e8ba' : '#f0b0b0' }}>{result.label}</div>
+              <div style={{ fontSize: 9, color: DIM, letterSpacing: 1 }}>CAMPAIGN TOTAL {result.total} PTS</div>
+            </div>
+            <span style={{ fontFamily: MONO, fontSize: 18, fontWeight: 700, color: result.correct ? '#7ed992' : '#e88a8a' }}>{result.pts > 0 ? '+' : ''}{result.pts}</span>
           </div>
         )}
       </div>
     );
   }
   // implied P(goal in spell) proxy: momentum of the threatening side scaled into a plausible band
-  function a2p(f, side) { const m = (f.momentum && f.momentum[side]) || 0.4; return Math.min(0.6, Math.max(0.12, 0.12 + m * 0.5)); }
+  function a2p(f, side) { const m = (f.momentum && f.momentum[side]) || 0.4; return a2pMom(m); }
+  function a2pMom(m) { return Math.min(0.6, Math.max(0.12, 0.12 + (m || 0.4) * 0.5)); }
   function loadBoard() { try { return JSON.parse(localStorage.getItem('bf_board') || '{}'); } catch { return {}; } }
   function addScore(board, wallet, pts) { const k = wallet ? wallet.slice(0, 6) : 'you'; board[k] = (board[k] || 0) + pts; try { localStorage.setItem('bf_board', JSON.stringify(board)); } catch {} return board; }
 
