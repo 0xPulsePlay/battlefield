@@ -16,18 +16,18 @@ We swap the driver and add UI around the existing HUD.
 - [x] Synthetic driver still selectable (`?mode=synthetic`) as offline/demo fallback (+ auto-fallback if engine unreachable).
 
 ### P1 — Consumer layer (new scope; design as we go)
-- [ ] Fixture picker over all 116 corpus fixtures, segmented live/upcoming/finished, country flags (SVG).
-- [ ] Replay scrubber: seek within a match; cinematic continuous fast-forward (1x/2x/4x/8x); no chart mush.
-- [ ] Every-pixel-inspectable: tap feed row/flare → real PossibleEvent/tick payload; long-press frontline → 1X2 Pct + "verify this tick" → **real Merkle proof walk** (leaf → root → on-chain account) via the validation endpoint.
-- [ ] Predict-along: danger-spell war-drum prompt; answers log-scored vs market probability; per-match leaderboard (local).
-- [ ] Share: replay link (fixture + match-second params) restores state; poster-frame export (canvas snapshot at full time).
-- [ ] Wallet sign-in (devnet, clearly labelled).
+- [x] Fixture picker over all corpus fixtures, segmented live/upcoming/finished, SVG country flags, search, sorted by market depth. **(browser-verified: 109 finished + 8 upcoming; fixture switch re-skins the diorama, e.g. BRA vs HAI)**
+- [x] Replay scrubber: seek within a match; cinematic continuous fast-forward (1×/2×/4×/8×); pause-on-drag, resume-on-release. **(verified)**
+- [x] Every-pixel-inspectable: VERIFY opens the tick payload (real state) → "verify this tick" → **real Merkle proof walk** (leaf → sub-tree → root → on-chain account) via `/v1/validation/scores`. **(verified: computed root === on-chain root, PROVEN AUTHENTIC)**
+- [x] Predict-along: danger-spell war-drum prompt (real pre-goal threat windows); answers log-scored vs market implied prob; per-match leaderboard (localStorage). **(verified: RAID INCOMING fires + scores)**
+- [x] Share: replay link (fixture + ts params) restores state; poster-frame PNG export (canvas snapshot). **(verified)**
+- [x] Wallet sign-in (devnet, clearly labelled DEVNET · NO REAL FUNDS; localStorage session). **(verified)**
 
 ### Guardrails (owner "Do not" list)
-- [ ] Sparkline honest across suspensions (never interpolate).
-- [ ] No 100vh (use 100dvh); no separate mobile-landscape layout; no real crests/FIFA marks.
-- [ ] Audio off by default; cinematics never block the frame loop; hold ~50fps.
-- [ ] Label reality: DevNet / replay-vs-live badges explicit in the UI.
+- [x] Sparkline honest across suspensions (never interpolate) — model holds prob + gaps at goals.
+- [x] No 100vh (100dvh used); no separate mobile-landscape layout; no real crests/FIFA marks (abstract SVG flags + army palettes).
+- [x] Audio off by default; cinematics never block the frame loop; renderer untouched.
+- [x] Label reality: DevNet badge on wallet, REPLAY/LIVE badge in the top bar, "no wallet, no gas" on the proof.
 
 ## Phase log
 | Phase | Status | Notes |
@@ -38,12 +38,12 @@ We swap the driver and add UI around the existing HUD.
 | P0 real-driver.js | PASS | 8/8; REPLAY virtual clock + LIVE SSE; same method surface |
 | P0 HUD dynamic identity + factory | PASS | app/session.js swaps driver+engine+palette per fixture; browser-verified |
 | P0 teams.js palettes + SVG flags | PASS | 6/6; 32 hand-tuned palettes + 25 real flags + generated fallback |
-| P1 fixture picker | PENDING | |
-| P1 scrubber | PENDING | |
-| P1 inspect + Merkle proof | PENDING | |
-| P1 predict-along | PENDING | |
-| P1 share + poster | PENDING | |
-| P1 wallet sign-in | PENDING | |
-| Playwright verification | PENDING | |
+| P1 fixture picker | PASS | app/console.jsx; segmented + flags + search; verified |
+| P1 scrubber | PASS | seek + 1/2/4/8× fast-forward; verified |
+| P1 inspect + Merkle proof | PASS | real /v1/validation/scores proof walk; PROVEN AUTHENTIC verified |
+| P1 predict-along | PASS | pre-goal threat windows + log-score + local leaderboard; verified |
+| P1 share + poster | PASS | deep-link + canvas PNG export; verified |
+| P1 wallet sign-in | PASS | devnet-labelled localStorage session; verified |
+| Playwright verification | IN PROGRESS | portrait journey verified; desktop smoke + final journey pending |
 
 _Run: `npm run dev` (→ :4400). Tests: `node --test bridge/`._

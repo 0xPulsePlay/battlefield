@@ -213,8 +213,8 @@ export class RealMatchDriver {
     }
   }
 
-  _threatObj(sd) {
-    const o = {};
+  _threatObj(sd, modelThreat) {
+    const o = { ...(modelThreat && modelThreat[sd]) };
     for (const k in this._threat[sd]) if (this._threat[sd][k] > this.ts) o[k] = true;
     return o;
   }
@@ -238,7 +238,7 @@ export class RealMatchDriver {
       front,
       possession: this.finished ? { side: null, zone: 'safe' } : { ...this.possession },
       momentum: { home: Math.round(this.mom.home * 100) / 100, away: Math.round(this.mom.away * 100) / 100 },
-      threat: { home: this._threatObj('home'), away: this._threatObj('away'), neutral: this._threatObj('neutral') },
+      threat: (() => { const mt = (!susp && this.model && this.model.threatAt) ? this.model.threatAt(this.ts) : null; return { home: this._threatObj('home', mt), away: this._threatObj('away', mt), neutral: this._threatObj('neutral', mt) }; })(),
       market: { suspended: susp, darkForMs: susp ? (this.fogForced ? 60000 : this.darkMs) : 0 },
     };
   }

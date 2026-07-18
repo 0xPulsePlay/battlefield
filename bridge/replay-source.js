@@ -195,6 +195,20 @@ export function buildReplayModel(fixtureResp, oddsResp) {
   for (const g of goals) scoreSteps.push({ ts: g.ts, ...orientScore(g.score, p1Home) });
   scoreSteps.sort((a, b) => a.ts - b.ts);
 
+  // threat flares (ts): the ~22s of pressure BEFORE a goal (the raid), plus a
+  // brief flare on each on-target/woodwork shot. Drives the diorama's threat
+  // chips and the predict-along war-drum prompt.
+  const sideOf = (participant) => (participant === 1) === p1Home ? 'home' : 'away';
+  const threatWindows = [];
+  for (const g of goals) threatWindows.push({ start: g.ts - 22000, end: g.ts, side: sideOf(g.participant), kind: 'goal' });
+  for (const e of tl.events || []) {
+    if (e.action === 'shot') {
+      const oc = String(e.detail || '').toLowerCase();
+      if (oc.includes('target') && !oc.includes('off') || oc.includes('wood')) threatWindows.push({ start: e.ts, end: e.ts + 6000, side: sideOf(e.participant), kind: 'goal' });
+    }
+  }
+  threatWindows.sort((a, b) => a.start - b.start);
+
   const finalScore = orientScore(f.finalScore, p1Home);
   const winner = finalScore.home > finalScore.away ? 'home' : finalScore.away > finalScore.home ? 'away' : 'draw';
   const firstTs = clock.firstTs;
@@ -216,8 +230,14 @@ export function buildReplayModel(fixtureResp, oddsResp) {
     suspends,
     eventTimeline,
     scoreSteps,
+    threatWindows,
 
     // ── query API (ts) ───────────────────────────────────────────────────
+    threatAt(ts) {
+      const t = { home: {}, away: {}, neutral: {} };
+      for (const w of threatWindows) if (ts >= w.start && ts < w.end) t[w.side][w.kind] = true;
+      return t;
+    },
     inSuspension(ts) {
       for (const w of suspends) if (ts >= w.start && ts < w.end) return w;
       return null;

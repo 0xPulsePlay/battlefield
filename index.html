@@ -21,6 +21,12 @@ a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
 @keyframes blinkDot{0%,100%{opacity:.25}50%{opacity:1}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes sheetUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:rgba(255,255,255,.14)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;margin-top:-6px;width:16px;height:16px;border-radius:50%;background:#d3ab48;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer}
+input[type=range]::-moz-range-track{height:4px;border-radius:999px;background:rgba(255,255,255,.14)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-radius:50%;background:#d3ab48;cursor:pointer}
 </style>
 </helmet>
 <div data-screen-label="Battlefield" style="position:fixed; inset:0; overflow:hidden; background:#070b08; font-family:'IBM Plex Mono',ui-monospace,monospace; color:#e2e7dc; font-variant-numeric:tabular-nums;">
@@ -28,7 +34,7 @@ a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
 
   <!-- ====== PORTRAIT / MOBILE HUD ====== -->
   <sc-if value="{{ isPortraitUI }}" hint-placeholder-val="{{ true }}">
-    <div style="position:absolute; top:0; left:0; right:0; padding: calc(env(safe-area-inset-top) + 10px) 14px 0; text-align:center; pointer-events:none; z-index:20;">
+    <div style="position:absolute; top:0; left:0; right:0; padding: calc(env(safe-area-inset-top) + 48px) 14px 0; text-align:center; pointer-events:none; z-index:20;">
       <div style="font-size:9px; font-weight:500; letter-spacing:3.5px; color:rgba(210,220,205,.48);">{{ headerLabel }}</div>
       <div style="margin-top:7px; font-size:22px; font-weight:600; letter-spacing:2px; color:#f0f3ec;">{{ scoreText }}</div>
       <div style="margin-top:3px; font-size:11px; font-weight:500; letter-spacing:1.5px; color:rgba(210,220,205,.55);">{{ clockText }}</div>
@@ -53,11 +59,8 @@ a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
     <div style="position:fixed; left:12px; bottom: calc(env(safe-area-inset-bottom) + 14px); display:flex; gap:8px; z-index:30;">
       <button onClick="{{ onOpenFeed }}" style="min-height:46px; padding:0 14px; font-family:inherit; font-size:10px; font-weight:700; letter-spacing:2px; border:1px solid rgba(200,210,190,.25); background:rgba(8,12,9,.82); color:#e8ecdf; border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#d3ab48; margin-right:7px; animation:blinkDot 1.6s infinite;"></span>FEED</button>
       <button onClick="{{ onOpenStats }}" style="min-height:46px; padding:0 14px; font-family:inherit; font-size:10px; font-weight:700; letter-spacing:2px; border:1px solid rgba(200,210,190,.25); background:rgba(8,12,9,.82); color:#e8ecdf; border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">STATS</button>
-    </div>
-    <div style="position:fixed; right:12px; bottom: calc(env(safe-area-inset-bottom) + 72px); display:flex; gap:6px; z-index:29;">
-      <button onClick="{{ onTogglePlay }}" style="width:46px; height:46px; font-family:inherit; font-size:13px; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.82); color:#e2e7dc; border-radius:9px; cursor:pointer;">{{ playLabel }}</button>
-      <button onClick="{{ onCycleSpeed }}" style="width:46px; height:46px; font-family:inherit; font-size:12px; font-weight:600; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.82); color:#e2e7dc; border-radius:9px; cursor:pointer;">{{ speedLabel }}</button>
-      <button onClick="{{ onToggleSound }}" style="width:46px; height:46px; font-family:inherit; font-size:8px; font-weight:600; letter-spacing:.5px; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.82); color: {{ soundColor }}; border-radius:9px; cursor:pointer;">{{ soundLabel }}</button>
+      <!-- play/speed live in the console scrubber; only the sound toggle sits here -->
+      <button onClick="{{ onToggleSound }}" style="min-height:46px; padding:0 12px; font-family:inherit; font-size:9px; font-weight:700; letter-spacing:1.5px; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.82); color: {{ soundColor }}; border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">{{ soundLabel }}</button>
     </div>
 
     <sc-if value="{{ landscapeHint }}" hint-placeholder-val="{{ false }}">
@@ -207,6 +210,7 @@ a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
   </sc-if>
 
   <x-import component-from-global-scope="WarRoom" from="./tweaks-panel.jsx ./war-room.jsx" hint-size="1px,1px"></x-import>
+  <x-import component-from-global-scope="BattleConsole" from="./app/console.jsx" hint-size="1px,1px"></x-import>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script>
@@ -250,9 +254,10 @@ class Component extends DCLogic {
     this._mqD.addEventListener('change', this._onMq);
     this._mqL.addEventListener('change', this._onMq);
 
-    const [{ BattleEngine }, sessionMod] = await Promise.all([import('./engine.js'), import('./app/session.js')]);
+    const [{ BattleEngine }, sessionMod, teamsMod] = await Promise.all([import('./engine.js'), import('./app/session.js'), import('./bridge/teams.js')]);
     this._BattleEngine = BattleEngine;
     this._session = sessionMod;
+    this._teams = teamsMod;
     const cv = this.canvasRef.current;
     this._resize = () => { const r = cv.getBoundingClientRect(); if (r.width && this.engine) this.engine.resize(r.width, r.height); };
     this._ro = new ResizeObserver(this._resize); this._ro.observe(cv);
@@ -273,17 +278,53 @@ class Component extends DCLogic {
       mom: (side, v) => this.driver && this.driver.setMomentumOverride(side, v),
       finale: () => this.driver && this.driver.jumpToFinale(),
     };
-    // window.BATTLE: app-level controls for the consumer shell + console
+    // window.BATTLE: app-level controls + data for the consumer shell + console
+    this._subs = new Set();
+    this._fixturesCache = null;
     window.BATTLE = {
       open: (fx, m) => this._openFixture({ fixtureId: fx, mode: m || this.state.replayMode }),
       seekProgress: (p) => this.driver && this.driver.seekProgress && this.driver.seekProgress(p),
       setSpeed: (x) => { this.driver && this.driver.setSpeed(x); this.setState({ speed: x }); },
+      setPaused: (b) => { this.driver && this.driver.setPaused(b); this.setState({ playing: !b }); },
       togglePlay: () => this._togglePlay(),
       getModel: () => this.model,
       getIdent: () => this.ident,
       getFrame: () => this._lastF,
       getMeta: () => this.fixtureMeta,
+      getState: () => ({ playing: this.state.playing, speed: this.state.speed, mode: this.state.replayMode,
+        progress: this.state.progress, fixtureId: this.state.fixtureId, ident: this.ident, frame: this._lastF, model: this.model }),
       baseUrl: () => this._baseUrl,
+      subscribe: (cb) => { this._subs.add(cb); return () => this._subs.delete(cb); },
+      // data helpers (all same-origin via the /v1 proxy)
+      fixtures: async () => {
+        if (this._fixturesCache) return this._fixturesCache;
+        const r = await fetch(`${this._baseUrl}/v1/fixtures?status=all&limit=300`);
+        const j = await r.json();
+        this._fixturesCache = j.fixtures || [];
+        return this._fixturesCache;
+      },
+      proof: async (seq, statKeys = [1, 2], verify = true) => {
+        const fx = this.state.fixtureId;
+        const r = await fetch(`${this._baseUrl}/v1/validation/scores?fixtureId=${fx}&seq=${seq}&statKeys=${statKeys.join(',')}&verify=${verify ? 1 : 0}`);
+        if (!r.ok) throw new Error(`proof ${r.status}`);
+        return r.json();
+      },
+      stateAtTs: async (ts) => {
+        const fx = this.state.fixtureId;
+        const r = await fetch(`${this._baseUrl}/v1/fixtures/${fx}/state?ts=${Math.round(ts)}`);
+        if (!r.ok) throw new Error(`state ${r.status}`);
+        return r.json();
+      },
+      // current wall-clock ts of the replay head (for proof/state lookups + share links)
+      headTs: () => (this.driver && this.driver.ts) || (this.model ? this.model.firstTs : 0),
+      flag: (name, opts) => this._teams ? this._teams.flagSvg(name, opts) : '',
+      abbr: (name) => this._teams ? this._teams.teamPalette(name).name.slice(0, 3) : String(name || '').slice(0, 3),
+      openFeed: () => this.setState({ overlay: 'feed' }),
+      openStats: () => this.setState({ overlay: 'stats' }),
+      shareUrl: () => {
+        const fx = this.state.fixtureId, ts = (this.driver && this.driver.ts) || 0;
+        return `${location.origin}${location.pathname}?fixture=${fx}&mode=${this.state.replayMode}&t=${Math.round(ts)}`;
+      },
     };
 
     this._utcIv = setInterval(() => {
@@ -398,6 +439,12 @@ class Component extends DCLogic {
     if (!this._anim) st.prob = f.prob;
     this.setState(st);
     if (this.state.isDesktop) this._spark();
+    // notify the consumer overlay (fixture picker / scrubber / predict-along)
+    if (this._subs && this._subs.size) {
+      const snap = { frame: f, ident: this.ident, progress: prog, playing: this.state.playing, speed: this.state.speed,
+        mode: this.state.replayMode, fixtureId: this.state.fixtureId, clockText: this._clockFmt(f.clock), threatText };
+      for (const cb of this._subs) { try { cb(snap); } catch (e) {} }
+    }
   }
 
   _event(e) {
