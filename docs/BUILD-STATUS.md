@@ -45,6 +45,8 @@ We swap the driver and add UI around the existing HUD.
 | P1 share + poster | PASS | deep-link + canvas PNG export; verified |
 | P1 wallet sign-in | PASS | devnet-labelled localStorage session; verified |
 | Playwright verification | PASS | full phone-portrait journey (pick→replay→inspect→verify→predict→poster) + desktop console smoke; zero console errors; screenshots in docs/screenshots/ |
+| Corpus breadth | PASS | 23/23 sampled fixtures (highest/middle/lowest odds-depth) replay cleanly end-to-end: frames flow, fulltime fires, prob always sums to ~100, no throws — validates "all 116 replayable" |
+| Round-2 polish | PASS | composed poster frame · tappable War Feed → per-event Merkle proof · persistent predict record in wallet |
 | Live SSE mode | SMOKE | mode=live opens composite SSE, LIVE badge, frames flow, no crash (intended for Sun final) |
 | Production build (`vite build`) | KNOWN-LIMIT | DC runtime (support.js) + x-import .jsx are runtime-fetched, not bundled → run via `npm run dev`. See BLOCKED.md |
 
