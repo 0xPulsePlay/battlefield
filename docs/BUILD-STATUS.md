@@ -9,11 +9,11 @@ We swap the driver and add UI around the existing HUD.
 
 ### P0 — Real data bridge (has a written spec; cut-line #1)
 - [x] `bridge/mapping.js`: pure, hermetic mappers (statusId→phase, 1X2 Pct→prob, possession level→zone, action→BattleEvent, front/momentum derivation). Unit-tested against recorded fixtures. **(13/13 green)**
-- [ ] `bridge/replay-source.js`: fetch fixture detail + 1X2 odds series; build a **match-clock-indexed** model (clock anchored on real event minutes + phase transitions, HT frozen, stoppage honoured); prob path with **suspension gaps at goals** (never interpolated). Hermetic tests.
-- [ ] `bridge/real-driver.js`: `RealMatchDriver` with the **same `{onFrame,onEvent}` constructor + method surface** as the synthetic `MatchDriver` (inject/forceThreat/setFogForced/setMomentumOverride/jumpToFinale/setPaused/setSpeed/destroy) + seek/loadFixture. REPLAY (virtual match clock) + LIVE (SSE).
-- [ ] Score always in sync with the clock; halftime is not a minute tick; stoppage/ET handled.
-- [ ] HUD team identity **dynamic** (home/away abbr+name+palette from fixture), not ENG/ARG literals.
-- [ ] Synthetic driver still selectable (`?mode=synthetic`) as offline/demo fallback.
+- [x] `bridge/replay-source.js`: fetch fixture detail + 1X2 odds series; build a **ts-native, match-clock-derived** model (clock anchored on real event minutes + phase transitions, HT frozen, stoppage honoured); prob path with **suspension gaps at goals** (never interpolated). **(9/9 green)**
+- [x] `bridge/real-driver.js`: `RealMatchDriver` — same `{onFrame,onEvent}` + method surface as synthetic (inject/forceThreat/setFogForced/setMomentumOverride/jumpToFinale/setPaused/setSpeed/destroy) + seek/seekProgress. REPLAY (virtual match clock) + LIVE (SSE) paths. **(8/8 green + verified in browser)**
+- [x] Score always in sync with the clock; halftime is not a minute tick; stoppage/ET handled. **(browser-verified: ENG-ARG plays 1-0 → 1-1 → 1-2, clock frozen at HT, suspension at the equalizer)**
+- [x] HUD team identity **dynamic** (home/away abbr+name+palette+SVG flag from fixture via bridge/teams.js), not ENG/ARG literals.
+- [x] Synthetic driver still selectable (`?mode=synthetic`) as offline/demo fallback (+ auto-fallback if engine unreachable).
 
 ### P1 — Consumer layer (new scope; design as we go)
 - [ ] Fixture picker over all 116 corpus fixtures, segmented live/upcoming/finished, country flags (SVG).
@@ -34,9 +34,10 @@ We swap the driver and add UI around the existing HUD.
 |---|---|---|
 | Recon + engine probes | PASS | Engine live, 116 fixtures, all shapes confirmed, hermetic fixtures captured |
 | P0 mapping.js + tests | PASS | 13/13 hermetic tests green |
-| P0 replay-source.js + tests | PENDING | |
-| P0 real-driver.js | PENDING | |
-| P0 HUD dynamic identity + factory | PENDING | |
+| P0 replay-source.js + tests | PASS | 9/9; match-clock model verified against real ENG-ARG |
+| P0 real-driver.js | PASS | 8/8; REPLAY virtual clock + LIVE SSE; same method surface |
+| P0 HUD dynamic identity + factory | PASS | app/session.js swaps driver+engine+palette per fixture; browser-verified |
+| P0 teams.js palettes + SVG flags | PASS | 6/6; 32 hand-tuned palettes + 25 real flags + generated fallback |
 | P1 fixture picker | PENDING | |
 | P1 scrubber | PENDING | |
 | P1 inspect + Merkle proof | PENDING | |

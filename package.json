@@ -5,9 +5,10 @@
   "description": "The Probability Battlefield — a World Cup match rendered as a war between two armies, driven by de-margined win probabilities and possession-danger data (TxLINE). UI prototype phase: synthetic driver, real data bridge to follow.",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "vite --host --port 4400 --strictPort",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --port 4400 --strictPort",
+    "test": "node --test bridge/"
   },
   "devDependencies": {
     "vite": "^6.0.0"
