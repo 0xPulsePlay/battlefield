@@ -42,11 +42,13 @@ Full journey, watched live, zero page/console errors (`docs/screenshots/`):
    data. `docs/screenshots/picker.png`.
 3. **Replay scrubber** — seek anywhere in the match; play/pause; **1×/2×/4×/8×** continuous
    fast-forward that never thins the sparkline into mush (the clock, score and events stay coherent).
-4. **Every tick inspectable → real Merkle proof** — `VERIFY` shows the raw TxLINE state the diorama
-   is drawing, then "**VERIFY THIS TICK ON-CHAIN**" fetches its proof and walks it in plain language:
-   **① the leaf** (the exact stat numbers) → **② the branch** (sub-tree sibling hashes) → **③ the
-   root** (computed) → **④ on-chain** (the anchored root on Solana account `6d9bJ2Et…`, epoch day).
-   Verdict **PROVEN AUTHENTIC** when `computedRoot === onChainRoot`. `docs/screenshots/proof.png`.
+4. **Every tick inspectable → real Merkle proof** — `VERIFY` (or **tapping any War Feed event**)
+   shows the raw TxLINE state, then "**VERIFY THIS TICK ON-CHAIN**" fetches its proof and walks it in
+   plain language: **① the leaf** (the exact stat numbers) → **② the branch** (sub-tree sibling
+   hashes) → **③ the root** (computed) → **④ on-chain** (the anchored root on Solana account
+   `6d9bJ2Et…`, epoch day). Verdict **PROVEN AUTHENTIC** when `computedRoot === onChainRoot`. Tapping
+   a goal proves `key 1 = 1` — the exact number on the scoreboard. `docs/screenshots/proof.png`,
+   `tap-feed-proof.png`.
 5. **Predict-along** — during a danger spell a **⚔ RAID INCOMING** war-drum asks goal / corner /
    nothing, showing the market's implied goal chance; the pick is **log-scored against that
    probability** (beating an unlikely-rated call pays more) and accrues a campaign total.
