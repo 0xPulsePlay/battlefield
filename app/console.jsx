@@ -164,14 +164,14 @@
   }
 
   // ── inspect + Merkle proof walk ───────────────────────────────────────────
-  function InspectSheet({ onClose }) {
+  function InspectSheet({ onClose, seq }) {
     const [phase, setPhase] = useState('loading'); // loading|state|proof|error
     const [state, setState] = useState(null);
     const [proof, setProof] = useState(null);
     const [err, setErr] = useState(null);
     useEffect(() => {
-      const ts = B().headTs ? B().headTs() : 0;
-      B().stateAtTs(ts).then((st) => { setState(st); setPhase('state'); }).catch((e) => { setErr(String(e.message || e)); setPhase('error'); });
+      const load = (seq != null && B().stateAtSeq) ? B().stateAtSeq(seq) : B().stateAtTs(B().headTs ? B().headTs() : 0);
+      load.then((st) => { setState(st); setPhase('state'); }).catch((e) => { setErr(String(e.message || e)); setPhase('error'); });
     }, []);
     const verify = async () => {
       setPhase('proof-loading');
@@ -384,8 +384,14 @@
   function BattleConsole() {
     const [ready, setReady] = useState(!!window.BATTLE);
     const [sheet, setSheet] = useState(null);
+    const [inspectSeq, setInspectSeq] = useState(null);
     const [wallet, setWallet] = useState(() => { try { return localStorage.getItem('bf_wallet') || null; } catch { return null; } });
     const [mode, setMode] = useState('replay');
+    useEffect(() => {
+      if (!ready || !B().onEvent) return;
+      return B().onEvent((e) => { if (e.kind === 'inspect') { setInspectSeq(e.seq); setSheet('inspect'); B().setPaused && B().setPaused(true); } });
+    }, [ready]);
+    const openSheet = (s) => { if (s === 'inspect') setInspectSeq(null); setSheet(s); };
     useEffect(() => {
       if (ready) return;
       const iv = setInterval(() => { if (window.BATTLE) { clearInterval(iv); setReady(true); } }, 120);
@@ -404,11 +410,11 @@
     const connect = (w) => { setWallet(w); try { w ? localStorage.setItem('bf_wallet', w) : localStorage.removeItem('bf_wallet'); } catch {} };
     return (
       <React.Fragment>
-        <TopChrome onOpen={setSheet} mode={mode} wallet={wallet} />
+        <TopChrome onOpen={openSheet} mode={mode} wallet={wallet} />
         <Scrubber />
         <PredictAlong wallet={wallet} />
         {sheet === 'picker' && <FixturePicker onClose={() => setSheet(null)} />}
-        {sheet === 'inspect' && <InspectSheet onClose={() => setSheet(null)} />}
+        {sheet === 'inspect' && <InspectSheet seq={inspectSeq} onClose={() => setSheet(null)} />}
         {sheet === 'share' && <ShareSheet onClose={() => setSheet(null)} />}
         {sheet === 'wallet' && <WalletSheet onClose={() => setSheet(null)} onConnect={connect} wallet={wallet} />}
       </React.Fragment>
