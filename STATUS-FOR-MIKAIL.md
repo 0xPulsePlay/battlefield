@@ -51,10 +51,12 @@ Full journey, watched live, zero page/console errors (`docs/screenshots/`):
    `tap-feed-proof.png`.
 5. **Predict-along** — during a danger spell a **⚔ RAID INCOMING** war-drum asks goal / corner /
    nothing, showing the market's implied goal chance; the pick is **log-scored against that
-   probability** (beating an unlikely-rated call pays more) and accrues a campaign total.
-   `docs/screenshots/predict.png`.
+   probability** (beating an unlikely-rated call pays more), accrues a campaign total, and persists a
+   **calls / correct / accuracy / points record** shown in the wallet sheet.
+   `docs/screenshots/predict.png`, `wallet-record.png`.
 6. **Share the war** — copy a **replay deep-link** (`?fixture=&mode=&t=` restores the exact fixture +
-   moment) and **export a poster PNG** of the terrain (verified: a 1.4 MB canvas snapshot downloads).
+   moment) and **export a composed poster PNG**: the terrain + a caption band (teams, score, clock,
+   win-probability bar, "anchored TxLINE market data · proven on Solana"). `docs/screenshots/poster-frame.png`.
 7. **Wallet sign-in** — devnet identity (clearly badged **DEVNET · NO REAL FUNDS**), persisted for
    the leaderboard.
 8. **Desktop command console** (`≥1024px`) — MATCH STATS, the ENG-WIN **probability path sparkline
