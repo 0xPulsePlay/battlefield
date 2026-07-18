@@ -24,13 +24,32 @@ tunnelling `:3001` (e.g. cloudflared/ngrok) or standing the engine up somewhere.
 **platform-wide blocker shared by all five apps**, tracked in `txline-explorer/docs/PLATFORM-PLAN.md`.
 **Demo path tonight:** `npm run dev` on this Mac (engine already running on :3001).
 
-## 3. Offline / venue-Wi-Fi risk: React + Babel + Google Fonts load from CDN
+## 3. Offline / venue-Wi-Fi risk: React + Babel + Google Fonts load from CDN — **DAY-SHIFT ITEM**
 **What:** `support.js` pulls React (unpkg) and Babel-standalone at load, and the HUD uses Google
 Fonts. With **no network, the page white-screens** (the "no network calls" rule was only ever about
 the *data feed*).
-**Not changed:** vendoring React/Babel locally risks breaking the DC runtime's expectations; deferred
-as too risky to do blind overnight. **Before demo day:** confirm venue Wi-Fi, or vendor React/Babel +
-fonts. The *data* path is already same-origin (Vite `/v1` proxy) so only the CDN libs are at risk.
+**Decision (night-shift):** do **not** vendor tonight — redirecting the generated `support.js` off its
+CDN URLs risks the DC runtime, and the run path must not change under the freeze protocol. This is a
+**day-shift task for the venue/deployed demo**, not a functional gap in the app.
+**Day-shift plan:** download React 18 UMD (dev+prod) + Babel-standalone + the two Google fonts into
+`public/vendor/`, then either (a) add a tiny pre-`support.js` shim that sets `window.React`/`ReactDOM`
+from the local copies so `support.js` finds them already-present, or (b) add a Vite dev-proxy for
+`unpkg.com`/`fonts.*` so they're served same-origin. Confirm venue Wi-Fi as the fallback. The *data*
+path is already same-origin (Vite `/v1` proxy), so only the CDN libs are at risk.
+
+## 3b. Real Solana wallet-adapter connect is labelled "planned", not wired — **DAY-SHIFT ITEM**
+**What:** wallet sign-in creates a **local guest identity** (a devnet-labelled pubkey stand-in in
+localStorage) to persist the predict-along record. It is honestly labelled in the UI — "GUEST IDENTITY
+· DEVNET LABEL · NO REAL FUNDS · WALLET CONNECT PLANNED" — and never claims a real signature.
+**Why not tonight:** a real `@solana/wallet-adapter` (Phantom/Backpack) integration means bundling npm
+React components, which the DC "Claude Design" runtime + CDN-React + no-`vite build` architecture makes
+risky, and the run path must not change under the freeze. The **real Solana substance is the Merkle
+proof walk** — every tick verified against the on-chain oracle, no wallet required — so wallet-connect
+is a login convenience, not the on-chain story.
+**Day-shift plan:** in a normal bundled app shell (or once React is vendored per #3), mount
+`@solana/wallet-adapter-react` with the Phantom/Backpack wallets, use `signMessage` for a
+sign-in-with-Solana challenge, and swap the guest pubkey for the connected one. Predict records key off
+the pubkey already, so the storage layer needs no change.
 
 ## 4. Live SSE mode is smoke-tested, not match-tested (no live match tonight)
 **What:** `?mode=live` opens the composite per-fixture SSE (`/v1/stream/fixtures/:id?since=0`),

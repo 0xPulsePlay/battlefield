@@ -59,7 +59,7 @@
           <Btn onClick={() => onOpen('share')} title="Share this moment" style={{ width: 34, height: 30, borderRadius: 10, display: 'grid', placeItems: 'center', padding: 0 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={INK} strokeWidth="2"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" /></svg>
           </Btn>
-          <button onClick={() => onOpen('wallet')} title={wallet ? 'Wallet · devnet' : 'Sign in with Solana'} style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 5, padding: '6px 9px', height: 30, boxSizing: 'border-box', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: wallet ? '#7ed992' : DIM, border: `1px solid ${wallet ? 'rgba(126,217,146,.4)' : LINE}`, background: PANEL, borderRadius: 10, cursor: 'pointer' }}>
+          <button onClick={() => onOpen('wallet')} title={wallet ? 'Guest ID · devnet' : 'Guest identity (devnet)'} style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 5, padding: '6px 9px', height: 30, boxSizing: 'border-box', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: wallet ? '#7ed992' : DIM, border: `1px solid ${wallet ? 'rgba(126,217,146,.4)' : LINE}`, background: PANEL, borderRadius: 10, cursor: 'pointer' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="6" width="20" height="13" rx="2" /><path d="M16 12h2" /></svg>
             {wallet ? wallet.slice(0, 4) + '…' : ''}
           </button>
@@ -353,25 +353,25 @@
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.35)', marginTop: 10 }}>SCORED VS THE MARKET'S IMPLIED PROBABILITY · THIS DEVICE</div>
+        <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.35)', marginTop: 10 }}>SCORED VS THE IMPLIED GOAL CHANCE · THIS DEVICE</div>
       </div>
     );
     return (
-      <Sheet title="SIGN IN WITH SOLANA" onClose={onClose} accent="#9b7de8">
-        <div style={{ display: 'inline-flex', alignSelf: 'flex-start', gap: 6, alignItems: 'center', fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: '#c9b6f0', border: '1px solid rgba(155,125,232,.4)', background: 'rgba(155,125,232,.12)', padding: '4px 9px', borderRadius: 6, marginBottom: 12 }}>◆ DEVNET · NO REAL FUNDS</div>
+      <Sheet title="GUEST IDENTITY" onClose={onClose} accent="#9b7de8">
+        <div style={{ display: 'inline-flex', alignSelf: 'flex-start', gap: 6, alignItems: 'center', fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: '#c9b6f0', border: '1px solid rgba(155,125,232,.4)', background: 'rgba(155,125,232,.12)', padding: '4px 9px', borderRadius: 6, marginBottom: 12 }}>◆ DEVNET LABEL · NO REAL FUNDS · WALLET CONNECT PLANNED</div>
         {!wallet ? (
           <div>
-            <Muted>Sign in with a Solana wallet to save your predict-along record and climb the per-match leaderboard. This demo uses a devnet identity — nothing is signed on mainnet and no SOL is spent.</Muted>
-            <button onClick={connect} style={{ width: '100%', padding: 13, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#fff', background: 'linear-gradient(90deg,#7d4fe0,#9b7de8)', border: 'none', borderRadius: 10, cursor: 'pointer' }}>CONNECT DEVNET WALLET</button>
+            <Muted>Create a local guest identity to save your predict-along record and climb the leaderboard. Real Solana wallet connect (Phantom / Backpack) is planned. The on-chain substance here is the <b style={{ color: INK }}>Merkle proof walk</b> — every tick is verified against the Solana oracle, no wallet needed.</Muted>
+            <button onClick={connect} style={{ width: '100%', padding: 13, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#fff', background: 'linear-gradient(90deg,#7d4fe0,#9b7de8)', border: 'none', borderRadius: 10, cursor: 'pointer' }}>CREATE GUEST ID (DEVNET)</button>
             <RecordPanel />
           </div>
         ) : (
           <div>
-            <Row k="Network" v="Solana devnet" />
+            <Row k="Identity" v="Guest (devnet label)" />
             <Row k="Address" v={wallet.slice(0, 8) + '…' + wallet.slice(-6)} />
-            <Row k="Status" v="Signed in ✓" />
+            <Row k="Wallet connect" v="Planned" />
             <RecordPanel />
-            <button onClick={() => onConnect(null)} style={{ width: '100%', marginTop: 8, padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>SIGN OUT</button>
+            <button onClick={() => onConnect(null)} style={{ width: '100%', marginTop: 8, padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>CLEAR GUEST ID</button>
           </div>
         )}
       </Sheet>
@@ -409,8 +409,8 @@
       const p = promptRef.current; promptRef.current = null; setPrompt(null);
       if (!p) return;
       const outcome = p.outcome, correct = choice === outcome;
-      // log-score vs the market's implied probability — a correct call the market
-      // rated unlikely is worth more (Beat-the-Market scoring).
+      // log-score vs the implied goal chance (a momentum read) — a correct call the
+      // model rated unlikely is worth more (Beat-the-Market-style scoring).
       const pMarket = outcome === 'goal' ? p.marketProb : outcome === 'corner' ? 0.15 : (1 - p.marketProb);
       const gain = correct ? Math.max(4, Math.round(-Math.log2(Math.max(0.03, pMarket)) * 10)) : -8;
       board.current = addScore(board.current, wallet, gain);
@@ -426,7 +426,7 @@
         {prompt && (
           <div style={{ width: 'min(420px,100%)', background: 'rgba(20,10,8,.94)', border: '1px solid rgba(211,171,72,.5)', borderRadius: 14, padding: '12px 14px', WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', boxShadow: '0 10px 40px rgba(0,0,0,.55)', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1) both' }}>
             <div style={{ fontFamily: COND, fontSize: 17, fontWeight: 700, letterSpacing: 2, color: GOLD }}>⚔ RAID INCOMING</div>
-            <div style={{ fontSize: 10, color: DIM, margin: '2px 0 10px' }}>Market implies <b style={{ color: INK }}>{Math.round(prompt.marketProb * 100)}%</b> goal chance this spell. Call it:</div>
+            <div style={{ fontSize: 10, color: DIM, margin: '2px 0 10px' }}>Momentum read implies <b style={{ color: INK }}>{Math.round(prompt.marketProb * 100)}%</b> goal chance this spell. Call it:</div>
             <div style={{ display: 'flex', gap: 7 }}>
               {[['goal', 'GOAL'], ['corner', 'CORNER'], ['nothing', 'NOTHING']].map(([k, l]) => (
                 <button key={k} onClick={() => answer(k)} style={{ flex: 1, padding: '11px 4px', fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: 1, borderRadius: 9, cursor: 'pointer', color: INK, border: '1px solid rgba(211,171,72,.35)', background: 'rgba(211,171,72,.1)' }}>{l}</button>

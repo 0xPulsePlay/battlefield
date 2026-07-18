@@ -32,7 +32,7 @@ the UI everywhere.
 Full journey, watched live, zero page/console errors (`docs/screenshots/`):
 
 1. **Real replay of the England–Argentina final** (`?fixture=18241006`). The battle plays the true
-   arc: England lead 1–0 (win-prob leaps **28% → 68%** at their 54' goal, the real de-margined jump),
+   arc: England lead 1–0 (win-prob leaps **~37% → 64%** at their 54' goal — peaking ~68.8% as they press — the real de-margined jump),
    Argentina equalise 1–1 (market suspends, fog rolls in), Argentina win 1–2 (England's line
    collapses to ~0.4%). Clock freezes at **48:00 · HT**, resumes for H2, full-time verdict correct.
    `docs/screenshots/core-portrait.png`, `goal-suspension.png`.
@@ -142,7 +142,7 @@ command console.
 ## 3-beat demo script (~90s)
 
 1. **"The match, as the market lives it."** Land on the England–Argentina final. Hit **4×** and let
-   the battle play: England's line surges as their win-probability leaps 28→68% at the 54' goal, the
+   the battle play: England's line surges as their win-probability leaps ~37→64% (peak ~69%) at the 54' goal, the
    market suspends (fog), then Argentina claw it back and overrun England at full time — every troop,
    every metre of trench is the real de-margined probability moving.
 2. **"Every pixel is provable."** Pause, tap **VERIFY** → the raw tick → **VERIFY THIS TICK ON-CHAIN**

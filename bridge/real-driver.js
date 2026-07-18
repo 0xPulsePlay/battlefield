@@ -118,6 +118,17 @@ export class RealMatchDriver {
     this.prob = this.model ? this._sanitizeProb(this.model.probAt(this.ts)) : { home: 33.3, draw: 33.4, away: 33.3 };
     this.score = this.model ? this.model.scoreAt(this.ts) : { home: 0, away: 0 };
     this.darkMs = 0;
+    // Reconstruct market-dark state at the landing point so seeking (even paused)
+    // INTO a suspension renders the fog — the renderer keys fog off frame.market
+    // alone, so a frozen playhead in a dark window must still report suspended.
+    if (this.model && this.model.inSuspension) {
+      const w = this.model.inSuspension(this.ts);
+      if (w && this.ts >= (w.goalTs ?? w.start)) {
+        this._activeSusp = w;
+        this._suspStarted.add(w.goalTs); // so the reopen (fog-rip) still fires when play resumes
+        this.darkMs = this.model.probAt(this.ts).darkMs || 0;
+      }
+    }
   }
 
   _sanitizeProb(p) { return { home: p.home, draw: p.draw, away: p.away }; }

@@ -56,7 +56,7 @@ phone (portrait — the primary target) via the LAN URL, or a desktop ≥1024px 
 
 On desktop (≥1024px) the feed and stats live in permanent side columns instead of overlays.
 
-Dev triggers (browser console): `BF.inject({kind:'goal', side:'home', minute:54, probJump:{from:28.4,to:69.7}})`,
+Dev triggers (browser console): `BF.inject({kind:'goal', side:'home', minute:54, probJump:{from:37.2,to:64.1}})`,
 `BF.threat('away')`, `BF.fog(true)`, `BF.mom('home', 0.9)`, `BF.finale()` — same event queue the
 scripted timeline and tweaks panel use.
 
