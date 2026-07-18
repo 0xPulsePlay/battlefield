@@ -44,6 +44,8 @@ We swap the driver and add UI around the existing HUD.
 | P1 predict-along | PASS | pre-goal threat windows + log-score + local leaderboard; verified |
 | P1 share + poster | PASS | deep-link + canvas PNG export; verified |
 | P1 wallet sign-in | PASS | devnet-labelled localStorage session; verified |
-| Playwright verification | IN PROGRESS | portrait journey verified; desktop smoke + final journey pending |
+| Playwright verification | PASS | full phone-portrait journey (pick→replay→inspect→verify→predict→poster) + desktop console smoke; zero console errors; screenshots in docs/screenshots/ |
+| Live SSE mode | SMOKE | mode=live opens composite SSE, LIVE badge, frames flow, no crash (intended for Sun final) |
+| Production build (`vite build`) | KNOWN-LIMIT | DC runtime (support.js) + x-import .jsx are runtime-fetched, not bundled → run via `npm run dev`. See BLOCKED.md |
 
 _Run: `npm run dev` (→ :4400). Tests: `node --test bridge/`._
