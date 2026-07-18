@@ -334,12 +334,28 @@
 
   // ── wallet sheet (devnet, clearly labelled) ───────────────────────────────
   function WalletSheet({ onClose, onConnect, wallet }) {
+    const rec = loadRecord();
+    const acc = rec.made ? Math.round((rec.correct / rec.made) * 100) : 0;
     const connect = () => {
       // devnet demo: a deterministic ed25519-style pubkey stand-in (no real signing here).
       const bytes = Array.from({ length: 32 }, () => (Math.random() * 256) | 0);
       const b58 = base58(bytes);
       onConnect(b58);
     };
+    const RecordPanel = () => (
+      <div style={{ margin: '14px 0 4px', padding: '12px 14px', border: `1px solid ${LINE}`, borderRadius: 12, background: 'rgba(255,255,255,.03)' }}>
+        <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: 2, color: DIM, marginBottom: 10 }}>PREDICT-ALONG RECORD</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'center' }}>
+          {[['CALLS', rec.made], ['RIGHT', `${rec.correct} · ${acc}%`], ['POINTS', rec.pts]].map(([k, v]) => (
+            <div key={k} style={{ flex: 1 }}>
+              <div style={{ fontFamily: COND, fontSize: 26, fontWeight: 700, color: k === 'POINTS' ? GOLD : '#f0f3ec' }}>{v}</div>
+              <div style={{ fontSize: 8.5, letterSpacing: 1.5, color: DIM }}>{k}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.35)', marginTop: 10 }}>SCORED VS THE MARKET'S IMPLIED PROBABILITY · THIS DEVICE</div>
+      </div>
+    );
     return (
       <Sheet title="SIGN IN WITH SOLANA" onClose={onClose} accent="#9b7de8">
         <div style={{ display: 'inline-flex', alignSelf: 'flex-start', gap: 6, alignItems: 'center', fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: '#c9b6f0', border: '1px solid rgba(155,125,232,.4)', background: 'rgba(155,125,232,.12)', padding: '4px 9px', borderRadius: 6, marginBottom: 12 }}>◆ DEVNET · NO REAL FUNDS</div>
@@ -347,13 +363,15 @@
           <div>
             <Muted>Sign in with a Solana wallet to save your predict-along record and climb the per-match leaderboard. This demo uses a devnet identity — nothing is signed on mainnet and no SOL is spent.</Muted>
             <button onClick={connect} style={{ width: '100%', padding: 13, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#fff', background: 'linear-gradient(90deg,#7d4fe0,#9b7de8)', border: 'none', borderRadius: 10, cursor: 'pointer' }}>CONNECT DEVNET WALLET</button>
+            <RecordPanel />
           </div>
         ) : (
           <div>
             <Row k="Network" v="Solana devnet" />
             <Row k="Address" v={wallet.slice(0, 8) + '…' + wallet.slice(-6)} />
             <Row k="Status" v="Signed in ✓" />
-            <button onClick={() => onConnect(null)} style={{ width: '100%', marginTop: 14, padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>SIGN OUT</button>
+            <RecordPanel />
+            <button onClick={() => onConnect(null)} style={{ width: '100%', marginTop: 8, padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>SIGN OUT</button>
           </div>
         )}
       </Sheet>
@@ -396,6 +414,7 @@
       const pMarket = outcome === 'goal' ? p.marketProb : outcome === 'corner' ? 0.15 : (1 - p.marketProb);
       const gain = correct ? Math.max(4, Math.round(-Math.log2(Math.max(0.03, pMarket)) * 10)) : -8;
       board.current = addScore(board.current, wallet, gain);
+      bumpRecord(correct, gain);
       const total = board.current[wallet ? wallet.slice(0, 6) : 'you'] || 0;
       setResult({ label: correct ? `RIGHT — ${outcome.toUpperCase()}` : `WRONG — it was ${outcome.toUpperCase()}`, pts: gain, total, correct });
       setTimeout(() => setResult(null), 4600);
@@ -432,6 +451,8 @@
   function a2pMom(m) { return Math.min(0.6, Math.max(0.12, 0.12 + (m || 0.4) * 0.5)); }
   function loadBoard() { try { return JSON.parse(localStorage.getItem('bf_board') || '{}'); } catch { return {}; } }
   function addScore(board, wallet, pts) { const k = wallet ? wallet.slice(0, 6) : 'you'; board[k] = (board[k] || 0) + pts; try { localStorage.setItem('bf_board', JSON.stringify(board)); } catch {} return board; }
+  function loadRecord() { try { return JSON.parse(localStorage.getItem('bf_record') || '{"made":0,"correct":0,"pts":0}'); } catch { return { made: 0, correct: 0, pts: 0 }; } }
+  function bumpRecord(correct, pts) { const r = loadRecord(); r.made++; if (correct) r.correct++; r.pts += pts; try { localStorage.setItem('bf_record', JSON.stringify(r)); } catch {} return r; }
 
   // ── root ──────────────────────────────────────────────────────────────────
   function BattleConsole() {
