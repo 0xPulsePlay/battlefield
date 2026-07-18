@@ -253,6 +253,7 @@
     return s1 != null ? `${s1}–${s2}` : '0–0';
   }
 
+  function roundRectPath(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
   const Muted = ({ children }) => <div style={{ color: DIM, fontSize: 11, padding: '18px 4px', textAlign: 'center' }}>{children}</div>;
   const Row = ({ k, v }) => <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: `1px solid ${LINE}` }}><span style={{ fontSize: 10, letterSpacing: 1, color: DIM }}>{k}</span><span style={{ fontFamily: MONO, fontSize: 12, color: INK, textAlign: 'right' }}>{v}</span></div>;
 
@@ -260,13 +261,65 @@
   function ShareSheet({ onClose }) {
     const [copied, setCopied] = useState(false);
     const url = B().shareUrl ? B().shareUrl() : location.href;
-    const poster = () => {
-      const cv = document.querySelector('canvas');
-      if (!cv) return;
-      const a = document.createElement('a');
-      a.download = `battlefield-${(B().getState && B().getState().fixtureId) || 'match'}.png`;
-      a.href = cv.toDataURL('image/png');
-      a.click();
+    const [posterMsg, setPosterMsg] = useState(null);
+    const poster = async () => {
+      const src = document.querySelector('canvas');
+      if (!src) return;
+      const dl = (dataUrl, name) => { const a = document.createElement('a'); a.download = name; a.href = dataUrl; a.click(); };
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const st = B().getState ? B().getState() : {};
+        const id = st.ident || (B().getIdent && B().getIdent()) || {};
+        const f = st.frame || (B().getFrame && B().getFrame()) || {};
+        const meta = (B().getMeta && B().getMeta()) || {};
+        const score = f.score || meta.finalScore || { home: 0, away: 0 };
+        const prob = f.prob || { home: 33.3, draw: 33.4, away: 33.3 };
+        const clock = f.clock || { s: 0, phase: 'FT' };
+        const ha = id.homeAbbr || 'HOME', aa = id.awayAbbr || 'AWAY';
+        const W = 1200, imgH = 1040, bandH = 380, H = imgH + bandH;
+        const oc = document.createElement('canvas'); oc.width = W; oc.height = H;
+        const g = oc.getContext('2d');
+        g.fillStyle = '#070b08'; g.fillRect(0, 0, W, H);
+        // diorama, cover-fit into the top area
+        const sr = src.width / src.height, tr = W / imgH; let dw, dh, dx, dy;
+        if (sr > tr) { dh = imgH; dw = imgH * sr; dx = (W - dw) / 2; dy = 0; } else { dw = W; dh = W / sr; dx = 0; dy = (imgH - dh) / 2; }
+        g.drawImage(src, dx, dy, dw, dh);
+        const grad = g.createLinearGradient(0, imgH - 220, 0, imgH + 20);
+        grad.addColorStop(0, 'rgba(7,11,8,0)'); grad.addColorStop(1, '#070b08');
+        g.fillStyle = grad; g.fillRect(0, imgH - 220, W, 240);
+        g.textAlign = 'center';
+        g.fillStyle = GOLD; g.font = '700 34px "Barlow Condensed", sans-serif';
+        g.fillText('T H E   P R O B A B I L I T Y   B A T T L E F I E L D', W / 2, imgH + 64);
+        g.fillStyle = 'rgba(210,220,205,.5)'; g.font = '500 21px "IBM Plex Mono", monospace';
+        g.fillText(`${(id.competition || 'WORLD CUP').toUpperCase()}  ·  ${(st.mode || 'replay').toUpperCase()}`, W / 2, imgH + 98);
+        // score line
+        g.font = '700 104px "Barlow Condensed", sans-serif'; g.fillStyle = '#f0f3ec';
+        g.fillText(`${ha}   ${score.home} — ${score.away}   ${aa}`, W / 2, imgH + 208);
+        g.fillStyle = '#e8ecdf'; g.font = '500 27px "IBM Plex Mono", monospace';
+        const cl = clock.phase === 'FT' ? 'FULL TIME' : `${Math.floor(clock.s / 60)}:${String(clock.s % 60).padStart(2, '0')} · ${clock.phase}`;
+        g.fillText(cl, W / 2, imgH + 250);
+        // win-probability bar (home | draw | away)
+        const bx = 140, bw = W - 280, by = imgH + 282, bh = 20;
+        const total = prob.home + prob.draw + prob.away || 100;
+        const segs = [[prob.home / total, '#d3273e'], [prob.draw / total, 'rgba(210,220,205,.45)'], [prob.away / total, '#7ab5e8']];
+        let cx = bx;
+        g.save(); roundRectPath(g, bx, by, bw, bh, 10); g.clip();
+        for (const [frac, col] of segs) { g.fillStyle = col; g.fillRect(cx, by, bw * frac, bh); cx += bw * frac; }
+        g.restore();
+        g.textAlign = 'left'; g.fillStyle = '#d3273e'; g.font = '600 19px "IBM Plex Mono", monospace';
+        g.fillText(`${ha} ${Math.round(prob.home)}%`, bx, by + bh + 26);
+        g.textAlign = 'center'; g.fillStyle = 'rgba(210,220,205,.6)';
+        g.fillText(`DRAW ${Math.round(prob.draw)}%`, W / 2, by + bh + 26);
+        g.textAlign = 'right'; g.fillStyle = '#7ab5e8';
+        g.fillText(`${Math.round(prob.away)}% ${aa}`, bx + bw, by + bh + 26);
+        g.textAlign = 'center'; g.fillStyle = 'rgba(143,196,236,.75)'; g.font = '600 18px "IBM Plex Mono", monospace';
+        g.fillText('every troop is real, anchored TxLINE market data · proven on Solana', W / 2, H - 28);
+        dl(oc.toDataURL('image/png'), `battlefield-${ha}-${aa}.png`);
+        setPosterMsg('POSTER SAVED ✓'); setTimeout(() => setPosterMsg(null), 1800);
+      } catch (e) {
+        dl(src.toDataURL('image/png'), 'battlefield.png');
+        setPosterMsg('SAVED (raw) ✓'); setTimeout(() => setPosterMsg(null), 1800);
+      }
     };
     return (
       <Sheet title="SHARE THE WAR" onClose={onClose}>
@@ -274,7 +327,7 @@
         <div style={{ fontFamily: MONO, fontSize: 10, color: '#8fc4ec', wordBreak: 'break-all', padding: '10px 12px', background: 'rgba(255,255,255,.03)', border: `1px solid ${LINE}`, borderRadius: 9, marginBottom: 10 }}>{url}</div>
         <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1600); }}
           style={{ width: '100%', padding: 12, marginBottom: 8, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#0d0b05', background: GOLD, border: 'none', borderRadius: 10, cursor: 'pointer' }}>{copied ? 'COPIED ✓' : 'COPY REPLAY LINK'}</button>
-        <button onClick={poster} style={{ width: '100%', padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>EXPORT POSTER FRAME (PNG)</button>
+        <button onClick={poster} style={{ width: '100%', padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>{posterMsg || 'EXPORT POSTER FRAME (PNG)'}</button>
       </Sheet>
     );
   }
