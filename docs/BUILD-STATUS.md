@@ -48,7 +48,7 @@ main broken. Playwright-verify each phase phone-portrait (402×874) first.
 ### P2 — If clock allows
 | ID | Acceptance criterion | Status |
 |---|---|---|
-| D1 | Vendor CDN deps (React/Babel/fonts) into public/vendor/ with shim so venue Wi-Fi can't white-screen | PENDING |
+| D1 | Vendor CDN deps (React/Babel/fonts) into public/vendor/ with shim so venue Wi-Fi can't white-screen | **PASS** — React/ReactDOM/Babel + latin fonts in public/vendor/; index.html `window.__resources` shim maps unpkg URLs to local copies (DC runtime honours it — no support.js edit); font `<link>` → /vendor/fonts.css. Playwright w/ unpkg+fonts.googleapis+gstatic all blocked: **0 external requests, app boots, fonts local, 0 console errors.** |
 
 ## Phase log (final round)
 | Phase | Status | Notes |

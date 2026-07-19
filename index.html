@@ -3,14 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Vendor React/Babel locally so no CDN (unpkg) is needed — venue Wi-Fi can't
+     white-screen the demo. The DC runtime honours window.__resources[url] (see
+     support.js cdnScriptFor), loading these local copies instead of unpkg. -->
+<script>
+window.__resources = {
+  "https://unpkg.com/react@18.3.1/umd/react.production.min.js": "/vendor/react.production.min.js",
+  "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "/vendor/react-dom.production.min.js",
+  "https://unpkg.com/@babel/standalone@7.29.0/babel.min.js": "/vendor/babel.min.js"
+};
+</script>
 <script src="./support.js"></script>
 </head>
 <body>
 <x-dc>
 <helmet>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<!-- fonts vendored locally (public/vendor/fonts/) — no Google Fonts CDN, so no network needed -->
+<link href="/vendor/fonts.css" rel="stylesheet">
 <style>
 html,body{margin:0;padding:0;background:#070b08;height:100dvh;overflow:hidden;overscroll-behavior:none}
 a{color:#d3ab48;text-decoration:none} a:hover{color:#e8c96a}
