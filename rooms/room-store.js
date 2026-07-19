@@ -24,6 +24,7 @@ export function update(store, code, id, patch) {
   if (!room) return null;
   const m = room.members.get(String(id));
   if (!m) return null;
+  if (patch.name !== undefined) m.name = String(patch.name || 'guest').slice(0, 20);
   if (patch.side !== undefined) m.side = patch.side;
   if (patch.pts !== undefined) m.pts = patch.pts | 0;
   if (patch.streak !== undefined) m.streak = patch.streak | 0;

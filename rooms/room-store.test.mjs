@@ -40,6 +40,17 @@ test('update patches only provided fields and re-sorts', () => {
   assert.equal(update(s, 'RM03', 'ghost', { pts: 1 }), null); // unknown member
 });
 
+test('a member can rename and it propagates in the roster', () => {
+  const s = createStore();
+  join(s, 'RM06', { id: 'a', name: 'GUEST-1', pts: 10 });
+  join(s, 'RM06', { id: 'b', name: 'GUEST-2', pts: 5 });
+  const r = update(s, 'RM06', 'a', { name: 'Mikail' });
+  assert.equal(r.find((m) => m.id === 'a').name, 'Mikail');
+  assert.equal(r.find((m) => m.id === 'a').pts, 10); // rename keeps other fields
+  update(s, 'RM06', 'a', { name: 'x'.repeat(40) });
+  assert.equal(roster(s, 'RM06').find((m) => m.id === 'a').name.length, 20); // length-capped
+});
+
 test('leave removes a member and drops the empty room', () => {
   const s = createStore();
   join(s, 'RM04', { id: 'a' });

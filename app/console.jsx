@@ -434,10 +434,12 @@
   }
 
   // ── share sheet ───────────────────────────────────────────────────────────
-  function ShareSheet({ onClose, room, onCreateRoom, onJoinRoom }) {
+  function ShareSheet({ onClose, room, wallet, onCreateRoom, onJoinRoom, onRename }) {
     const [copied, setCopied] = useState(null);
     const [invCopied, setInvCopied] = useState(null);
     const [joinCode, setJoinCode] = useState('');
+    const [name, setName] = useState(() => roomIdentity(wallet).name);
+    const commitName = () => { const v = name.trim(); if (v && onRename) onRename(v); };
     const url = B().shareUrl ? B().shareUrl() : location.href;
     const inviteUrl = room ? `${url}${url.includes('?') ? '&' : '?'}room=${room.code}` : null;
     const [posterMsg, setPosterMsg] = useState(null);
@@ -517,20 +519,25 @@
         <button onClick={poster} style={{ width: '100%', padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>{posterMsg || 'EXPORT POSTER FRAME (PNG)'}</button>
         <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${LINE}` }}>
           <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 2, color: DIM, marginBottom: 8 }}>PLAY LIVE WITH FRIENDS</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9 }}>
+            <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: DIM, flex: '0 0 auto' }}>YOU</span>
+            <input value={name} onChange={(e) => setName(e.target.value.replace(/[<>]/g, '').slice(0, 20))} onBlur={commitName} onKeyDown={(e) => { if (e.key === 'Enter') { commitName(); e.target.blur(); } }} placeholder="your name" maxLength={20}
+              style={{ flex: 1, boxSizing: 'border-box', padding: '8px 11px', fontFamily: MONO, fontSize: 12, color: INK, background: 'rgba(255,255,255,.04)', border: `1px solid ${LINE}`, borderRadius: 9, outline: 'none' }} />
+          </div>
           {!room ? (
             <React.Fragment>
-              <button onClick={() => onCreateRoom && onCreateRoom()} style={{ width: '100%', padding: 12, marginBottom: 8, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, color: '#fff', background: 'linear-gradient(90deg,#7d4fe0,#9b7de8)', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <button onClick={() => { commitName(); onCreateRoom && onCreateRoom(); }} style={{ width: '100%', padding: 12, marginBottom: 8, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, color: '#fff', background: 'linear-gradient(90deg,#7d4fe0,#9b7de8)', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="9" cy="8" r="3" /><path d="M15 8a3 3 0 100-2M3 20c0-3 3-5 6-5s6 2 6 5M15 15c3 0 6 2 6 5" /></svg>
                 CREATE A ROOM
               </button>
               <div style={{ display: 'flex', gap: 6 }}>
                 <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="ROOM CODE" maxLength={8} style={{ flex: 1, boxSizing: 'border-box', padding: '10px 11px', fontFamily: MONO, fontSize: 12, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.04)', border: `1px solid ${LINE}`, borderRadius: 9, outline: 'none' }} />
-                <button onClick={() => { if (joinCode && onJoinRoom) { onJoinRoom(joinCode); onClose(); } }} style={{ padding: '0 16px', fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: 1, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 9, cursor: 'pointer' }}>JOIN</button>
+                <button onClick={() => { if (joinCode && onJoinRoom) { commitName(); onJoinRoom(joinCode); onClose(); } }} style={{ padding: '0 16px', fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: 1, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 9, cursor: 'pointer' }}>JOIN</button>
               </div>
             </React.Fragment>
           ) : (
             <React.Fragment>
-              <div style={{ fontFamily: MONO, fontSize: 10, color: DIM, marginBottom: 6 }}>In room <b style={{ color: GOLD }}>{room.code}</b> · {(room.members || []).length} player{(room.members || []).length === 1 ? '' : 's'}. Share the invite:</div>
+              <div style={{ fontFamily: MONO, fontSize: 10, color: DIM, marginBottom: 6 }}>In room <b style={{ color: GOLD }}>{room.code}</b> · {(room.members || []).length} player{(room.members || []).length === 1 ? '' : 's'} · edit your name above. Share the invite:</div>
               <div style={{ fontFamily: MONO, fontSize: 10, color: '#8fc4ec', wordBreak: 'break-all', padding: '10px 12px', background: 'rgba(255,255,255,.03)', border: `1px solid ${LINE}`, borderRadius: 9, marginBottom: 8 }}>{inviteUrl}</div>
               <button onClick={() => copyText(inviteUrl, setInvCopied)} style={{ width: '100%', padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, color: '#0d0b05', background: GOLD, border: 'none', borderRadius: 10, cursor: 'pointer' }}>{invCopied || 'COPY INVITE LINK'}</button>
             </React.Fragment>
@@ -940,10 +947,14 @@
   // ── friend rooms (real-time, C10) ──────────────────────────────────────────
   // WebSocket to the :4490 sidecar via the same-origin /rooms proxy. We broadcast
   // our side + running record; the server fans the sorted roster back to everyone.
+  // a custom display name (G1); falls back to short pubkey or GUEST-xxx.
+  function loadRoomName() { try { return localStorage.getItem('bf_room_name') || ''; } catch { return ''; } }
+  function saveRoomName(n) { const v = String(n || '').replace(/[<>]/g, '').trim().slice(0, 20); try { v ? localStorage.setItem('bf_room_name', v) : localStorage.removeItem('bf_room_name'); } catch {} return v; }
+  function defaultRoomName(wallet, id) { return wallet ? (wallet.slice(0, 4) + '…' + wallet.slice(-4)) : ('GUEST-' + String(id || '').slice(-3).toUpperCase()); }
   function roomIdentity(wallet) {
     let id = wallet;
     if (!id) { try { id = localStorage.getItem('bf_guest_room_id'); } catch {} if (!id) { id = 'g' + Math.random().toString(36).slice(2, 8); try { localStorage.setItem('bf_guest_room_id', id); } catch {} } }
-    const name = wallet ? (wallet.slice(0, 4) + '…' + wallet.slice(-4)) : ('GUEST-' + id.slice(-3).toUpperCase());
+    const name = loadRoomName() || defaultRoomName(wallet, id);
     return { id, name };
   }
   function useRooms(wallet, side) {
@@ -968,6 +979,8 @@
     }, [wallet]);
     const leave = useCallback(() => { try { wsRef.current && wsRef.current.close(); } catch {} wsRef.current = null; setRoom(null); try { const u = new URL(location.href); u.searchParams.delete('room'); history.replaceState(null, '', u); } catch {} }, []);
     const create = useCallback(() => { const code = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[(Math.random() * 32) | 0]).join(''); join(code); return code; }, [join]);
+    // rename yourself → persists locally + broadcasts to everyone in the room (G1)
+    const rename = useCallback((newName) => { const v = saveRoomName(newName); send({ type: 'update', name: v || roomIdentity(wallet).name }); return v; }, [wallet]);
     // fan our own record/side changes to the room
     useEffect(() => {
       const onRec = (e) => { const r = e.detail || loadRecord(); send({ type: 'update', pts: r.pts, streak: r.streak, correct: r.correct, made: r.made }); };
@@ -976,7 +989,7 @@
       return () => { window.removeEventListener('bf-record', onRec); window.removeEventListener('bf-side', onSide); };
     }, []);
     useEffect(() => () => { try { wsRef.current && wsRef.current.close(); } catch {} }, []);
-    return { room, join, leave, create, myId: () => idRef.current };
+    return { room, join, leave, create, rename, myId: () => idRef.current };
   }
 
   function RoomPanel({ room, myId, onLeave }) {
@@ -1035,7 +1048,7 @@
     });
     const [showTips, setShowTips] = useState(false);
     const enter = () => { try { localStorage.setItem('bf_entered', '1'); } catch {} setHome(null); setSheet('picker'); };
-    const { room, join: joinRoom, leave: leaveRoom, create: createRoom, myId } = useRooms(wallet, side);
+    const { room, join: joinRoom, leave: leaveRoom, create: createRoom, rename: renameRoom, myId } = useRooms(wallet, side);
     const openInspect = useCallback((subject) => { setInspectSubject(subject); setSheet('inspect'); B().setPaused && B().setPaused(true); }, []);
     useEffect(() => {
       if (!ready || !B().onEvent) return;
@@ -1092,7 +1105,7 @@
       <React.Fragment>
         <TopChrome onOpen={openSheet} mode={mode} wallet={wallet} />
         <CampaignHUD side={side} onPickSide={() => setShowSidePick(true)} />
-        <RoomPanel room={room} myId={myId} onLeave={leaveRoom} />
+        <RoomPanel room={room} myId={myId} onLeave={leaveRoom} onRename={renameRoom} />
         <Scrubber />
         <InspectHotspots onInspect={openInspect} mode={mode} />
         <PredictAlong wallet={wallet} side={side} />
@@ -1100,7 +1113,7 @@
         {showSidePick && <SidePick onPick={pickSide} onClose={() => { setShowSidePick(false); try { localStorage.setItem('bf_side_prompted', '1'); } catch {} }} />}
         {sheet === 'picker' && <FixturePicker onClose={() => setSheet(null)} />}
         {sheet === 'inspect' && <InspectSheet subject={inspectSubject} onClose={() => setSheet(null)} />}
-        {sheet === 'share' && <ShareSheet onClose={() => setSheet(null)} room={room} onCreateRoom={createRoom} onJoinRoom={joinRoom} />}
+        {sheet === 'share' && <ShareSheet onClose={() => setSheet(null)} room={room} wallet={wallet} onCreateRoom={createRoom} onJoinRoom={joinRoom} onRename={renameRoom} />}
         {sheet === 'wallet' && <WalletSheet onClose={() => setSheet(null)} onConnect={connect} wallet={wallet} walletKind={walletKind} />}
         {home === 'hero' && <Home wallet={wallet} walletKind={walletKind} onConnect={connect} onEnter={enter} />}
       </React.Fragment>

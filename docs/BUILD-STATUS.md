@@ -8,6 +8,17 @@ Run: `npm run dev` (→ :4400) · rooms: `npm run rooms` (→ :4490) · tests: `
 
 ---
 
+# ROUND 2 — §G polish (mobile composition + room usernames, 2026-07-19)
+
+| ID | Acceptance criterion | Status |
+|---|---|---|
+| G1 | Room usernames: name on create/join (pre-filled, editable, persisted, broadcast, shown on roster); rename propagates | **PASS** — "YOU" name input in the share sheet (pre-filled short pubkey / GUEST-xxx, ≤20 chars, sanitized, persisted to bf_room_name); join/create/rename broadcast it; room-store handles `name` (+1 test, 44/44). Playwright: A/B set Alice/Bob, both see both; A→Alicia propagates to B. |
+| G2 | Desktop: points/streak visually adjacent to the RAID card; no overlap w/ console columns at 1440×900 | PENDING |
+| G3 | Mobile: the frontline-stats chip renamed to say what it does + repositioned; no collision at 360/402/430 | PENDING |
+| G4 | Mobile: holistic floating-panel pass (nav de-squished, points/side rehomed, leaderboard rehomed, no empty gap); screenshots at 360/402/430 no overlaps/orphans, 0 console errors | PENDING |
+
+---
+
 # FINAL ROUND — spec 05b-battlefield-final-round (2026-07-19)
 
 Confirmed phase order (Mikail chose SDK-first):
