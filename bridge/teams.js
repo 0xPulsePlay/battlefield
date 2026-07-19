@@ -48,6 +48,9 @@ const PALETTES = {
   Iran:        { main: '#f4f6f8', deep: '#0a7d3b', accent: '#d3273e', tint: '#9ac4a8', tracer: '#e0f0e0', pattern: 'plain',   kit2: '#0a7d3b' },
   'Saudi Arabia': { main: '#0a7d3b', deep: '#065426', accent: '#f4f6f8', tint: '#7fce9a', tracer: '#e0f0e6', pattern: 'plain', kit2: '#f4f6f8' },
   Scotland:    { main: '#1c3fa0', deep: '#12275c', accent: '#f4f6f8', tint: '#8ab0ea', tracer: '#e0edff', pattern: 'plain',   kit2: '#f4f6f8' },
+  // fictional teams for the SANDBOX battle (clearly not real nations)
+  Astoria:     { main: '#e0483c', deep: '#7a1420', accent: '#f2c94c', tint: '#f0958c', tracer: '#ffd6a8', pattern: 'stripes', kit2: '#7a1420' },
+  Verdania:    { main: '#2fa15a', deep: '#0d5a30', accent: '#f4f6f8', tint: '#8fd6a8', tracer: '#e0f0e6', pattern: 'plain',   kit2: '#0d5a30' },
 };
 
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }

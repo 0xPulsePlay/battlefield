@@ -43,7 +43,11 @@
   function TopChrome({ onOpen, mode, wallet }) {
     const snap = useSnap();
     const id = snap.ident || {};
+    const sandbox = mode === 'sandbox' || mode === 'synthetic';
     const live = mode === 'live';
+    const modeLabel = sandbox ? 'SANDBOX' : live ? 'LIVE' : 'REPLAY';
+    const modeColor = sandbox ? '#c9b6f0' : live ? '#7ed992' : GOLD;
+    const modeBorder = sandbox ? 'rgba(155,125,232,.45)' : live ? 'rgba(126,217,146,.4)' : 'rgba(211,171,72,.4)';
     return (
       <div style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 8px)', left: 0, right: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 10px', zIndex: 46, pointerEvents: 'none' }}>
         <button onClick={() => onOpen('picker')} style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 11px 7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: INK, border: `1px solid ${LINE}`, background: PANEL, borderRadius: 10, cursor: 'pointer', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
@@ -54,12 +58,12 @@
           <span style={{ opacity: .5 }}>▾</span>
         </button>
         <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 9px', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: live ? '#7ed992' : GOLD, border: `1px solid ${live ? 'rgba(126,217,146,.4)' : 'rgba(211,171,72,.4)'}`, background: PANEL, borderRadius: 10 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? '#7ed992' : GOLD, animation: 'blinkDot 1.6s infinite' }} />{live ? 'LIVE' : 'REPLAY'}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 9px', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: modeColor, border: `1px solid ${modeBorder}`, background: PANEL, borderRadius: 10 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: modeColor, animation: 'blinkDot 1.6s infinite' }} />{modeLabel}
           </span>
-          <Btn onClick={() => onOpen('inspect')} title="Verify this tick on-chain" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 9px', height: 30, borderRadius: 10, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: '#8fc4ec' }}>
+          {!sandbox && <Btn onClick={() => onOpen('inspect')} title="Verify this tick on-chain" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 9px', height: 30, borderRadius: 10, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: '#8fc4ec' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8fc4ec" strokeWidth="2"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z" /><path d="M9 12l2 2 4-4" /></svg>VERIFY
-          </Btn>
+          </Btn>}
           <Btn onClick={() => onOpen('share')} title="Share this moment" style={{ width: 34, height: 30, borderRadius: 10, display: 'grid', placeItems: 'center', padding: 0 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={INK} strokeWidth="2"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" /></svg>
           </Btn>
@@ -82,6 +86,8 @@
     const f = snap.frame;
     const speed = snap.speed || 1;
     const seek = (p) => { B().seekProgress && B().seekProgress(p); };
+    // no timeline to scrub in the synthetic sandbox (it's a live-feel playground)
+    if (snap.mode === 'sandbox' || snap.mode === 'synthetic') return null;
     return (
       <div style={{ position: 'fixed', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom) + 70px)', zIndex: 44, pointerEvents: 'auto' }}>
         <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 12, padding: '8px 12px 9px', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
@@ -116,6 +122,20 @@
       .sort((a, b) => (b.oddsTickCount || 0) - (a.oddsTickCount || 0));
     return (
       <Sheet title="CHOOSE YOUR BATTLE" onClose={onClose}>
+        <button onClick={() => { B().open(0, 'sandbox'); onClose(); }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 12px', marginBottom: 10, borderRadius: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid rgba(155,125,232,.4)', background: 'linear-gradient(100deg, rgba(155,125,232,.14), rgba(255,255,255,.02))', color: INK }}>
+          <span style={{ flex: '0 0 auto', display: 'grid', placeItems: 'center', width: 34, height: 34, borderRadius: 9, background: 'rgba(155,125,232,.16)', border: '1px solid rgba(155,125,232,.4)' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9b6f0" strokeWidth="2" strokeLinecap="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5" /><path d="M13 19l6-6" /><path d="M16 16l4 4" /><path d="M19 21l2-2" /><path d="M9.5 6.5L21 18v3h-3L6.5 9.5" /></svg>
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontFamily: COND, fontSize: 15, fontWeight: 700, letterSpacing: 2, color: '#f0f3ec' }}>SANDBOX ARENA</span>
+              <span style={{ fontFamily: MONO, fontSize: 7.5, fontWeight: 700, letterSpacing: 1, color: '#c9b6f0', border: '1px solid rgba(155,125,232,.4)', borderRadius: 4, padding: '1.5px 5px' }}>WAR ROOM</span>
+            </div>
+            <div style={{ fontSize: 9.5, color: DIM, marginTop: 2, lineHeight: 1.4 }}>Two fictional sides on the synthetic engine — call the shots by hand.</div>
+          </div>
+          <span style={{ color: '#c9b6f0', opacity: .7, fontSize: 16 }}>›</span>
+        </button>
         <div style={{ display: 'flex', gap: 6, padding: '2px 2px 10px' }}>
           {SEGS.map(([k, lbl]) => (
             <button key={k} onClick={() => setSeg(k)} style={{ flex: 1, padding: '7px 4px', fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: 1, borderRadius: 8, cursor: 'pointer', border: `1px solid ${seg === k ? 'rgba(211,171,72,.5)' : LINE}`, background: seg === k ? 'rgba(211,171,72,.14)' : 'rgba(255,255,255,.03)', color: seg === k ? GOLD : DIM }}>

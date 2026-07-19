@@ -642,6 +642,7 @@ class Component extends DCLogic {
       mk('MOMENTUM', mom.home, mom.away, `${Math.round(mom.home * 100)}`, `${Math.round(mom.away * 100)}`),
     ];
     const modeLive = s.replayMode === 'live';
+    const modeSandbox = s.replayMode === 'sandbox' || s.replayMode === 'synthetic';
     return {
       canvasRef: this.canvasRef, sparkRef: this.sparkRef,
       isPortraitUI: !s.isDesktop, isDesktop: s.isDesktop, landscapeHint: s.landscapeHint,
@@ -651,7 +652,7 @@ class Component extends DCLogic {
       threatShow: !!s.threatText, threatText: s.threatText,
       feedRows: s.feed.map(r => ({ ...r, verifyMark: r.seq != null ? 'VERIFY ✓' : 'ANCHORED ✓', onTap: r.seq != null ? () => this._inspectSeq(r.seq) : (() => {}) })),
       statRows,
-      headerLabel: `${s.competition} · ${modeLive ? 'LIVE' : 'REPLAY'}`,
+      headerLabel: modeSandbox ? `${s.competition} · SANDBOX` : `${s.competition} · ${modeLive ? 'LIVE' : 'REPLAY'}`,
       statHomeName: s.homeName, statAwayName: s.awayName, statAbbrPair: `${s.homeAbbr} · ${s.awayAbbr}`,
       loading: s.loading, loadError: s.loadError,
       overlayShow: !!s.overlay,

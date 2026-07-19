@@ -34,6 +34,14 @@ const SYN_TEAMS = {
   participant1IsHome: true,
 };
 
+// SANDBOX identity — two fictional teams so nobody mistakes it for a real match.
+// The War Room lives here (real fixtures take events only from the data).
+const SANDBOX_TEAMS = {
+  home: { name: 'Astoria', abbr: 'AST' },
+  away: { name: 'Verdania', abbr: 'VRD' },
+  participant1IsHome: true,
+};
+
 // Loads everything for a fixture and returns a `createDriver(onFrame,onEvent)`
 // thunk so the caller can build the engine FIRST, then start the driver — no
 // frame lands on a half-swapped engine during a fixture switch.
@@ -45,6 +53,17 @@ export async function openSession({ mode = 'replay', fixtureId = DEFAULT_FIXTURE
       engineTeams: { home: engineTeam('England'), away: engineTeam('Argentina') },
       names: { home: 'ENGLAND', away: 'ARGENTINA' },
       fixtureMeta: { fixtureId: DEFAULT_FIXTURE, status: 'played', competition: 'WORLD CUP', synthetic: true },
+      createDriver: (onFrame, onEvent) => new MatchDriver({ onFrame, onEvent }),
+    };
+  }
+
+  if (mode === 'sandbox') {
+    return {
+      model: null,
+      ident: identOf(SANDBOX_TEAMS, 'SANDBOX ARENA', 'sandbox'),
+      engineTeams: { home: engineTeam('Astoria'), away: engineTeam('Verdania') },
+      names: { home: 'ASTORIA', away: 'VERDANIA' },
+      fixtureMeta: { fixtureId: null, status: 'sandbox', competition: 'SANDBOX ARENA', sandbox: true },
       createDriver: (onFrame, onEvent) => new MatchDriver({ onFrame, onEvent }),
     };
   }
