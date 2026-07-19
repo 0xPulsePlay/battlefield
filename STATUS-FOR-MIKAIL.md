@@ -1,154 +1,139 @@
-# Night-shift handoff — The Probability Battlefield, now on real TxLINE data (2026-07-18)
+# Battlefield — Final-Round handoff (2026-07-19)
 
 ## TL;DR
 
-The war diorama is no longer a puppet. The synthetic `driver.js` has been replaced by a **real data
-bridge** that folds live TxLINE market state into the exact `BattleFrame`/`BattleEvent` contract the
-renderer already speaks — so **all 116 corpus matches are now playable battles**, driven by the real
-de-margined 1X2 probabilities, real scores, real event timeline, with true match-clock semantics
-(halftime frozen, stoppage/ET honoured, score always in sync). **The renderer (`engine.js`) and the
-data contract were not touched** — exactly the seam the architecture was designed around.
+The final-round spec (`.nightshift/specs/05b-battlefield-final-round.md`) is **fully built** —
+every P0 (B1–B7) and every P1 (C1–C11) item, plus the P2 (D1). All 14 items were verified in
+Playwright (phone-portrait first) with **zero console errors**, and each shipped as its own commit.
+Base was `7ec691b`; HEAD is **`1d5d2f9`**. `npm test` = **43/43** (37 bridge + 6 rooms).
 
-On top of that, the whole **consumer layer** now exists: a fixture picker over the corpus, a replay
-scrubber with cinematic 1×/2×/4×/8× fast-forward, **every tick is inspectable with a real Merkle
-proof walk** (leaf → sub-tree → root → the Solana account that anchored it), a **predict-along**
-war-drum scored against the market's implied probability, **share links + poster export**, and
-**devnet wallet sign-in**. Verified end-to-end in a phone-portrait Playwright journey with zero
-console errors.
+Biggest change vs the last handoff: the app now runs entirely through the **SDKs** (data via
+`@txline/client-sdk`, on-chain proof verified **twice** — once in your own browser via
+`@txline/verify`, once by the engine), has a **real game loop** (pick-a-side · streaks · points ·
+share), **real-time friend rooms**, a **Phantom** sign-in, a **creator overlay** route, and now runs
+**fully offline** (React/Babel/fonts vendored) so venue Wi-Fi can't white-screen it.
 
-**One thing to know:** the run path is **`npm run dev`** (port 4400). The DC "Claude Design" runtime
-+ `<x-import>` .jsx components are runtime-fetched, so `vite build` does not produce a runnable
-bundle, and the engine is local-only — a "deployed link" needs the engine tunnelled (see `BLOCKED.md`,
-a platform-wide issue). The dev server on this Mac is the demo, and it's solid.
+**Check first:** open `http://localhost:4400/` (cold) → you land on the new HOME → *continue as guest*
+→ CHOOSE YOUR BATTLE → the England–Argentina final. A "pick your side" prompt appears once; pick
+England. That whole first-run flow is the single most important thing to eyeball.
 
-Your six corrections from last run were all honoured: **real data**, **match-clock not wall-clock**,
-**simulated-live progression** (replay is the whole product), **mobile-first + segmented fixtures**,
-**cinematic continuous fast-forward** (no chart mush — the virtual clock sweeps smoothly at any
-speed), and **score stays in sync** with the clock in both modes. DevNet/replay-vs-live are badged in
-the UI everywhere.
+---
 
-## What works — verified in the browser (Playwright, phone-portrait 402×874)
+## What I verified end-to-end (Playwright headless, mostly phone-portrait 402×874, zero console errors)
 
-Full journey, watched live, zero page/console errors (`docs/screenshots/`):
+Everything below I actually watched pass — not "should work".
 
-1. **Real replay of the England–Argentina final** (`?fixture=18241006`). The battle plays the true
-   arc: England lead 1–0 (win-prob leaps **~37% → 64%** at their 54' goal — peaking ~68.8% as they press — the real de-margined jump),
-   Argentina equalise 1–1 (market suspends, fog rolls in), Argentina win 1–2 (England's line
-   collapses to ~0.4%). Clock freezes at **48:00 · HT**, resumes for H2, full-time verdict correct.
-   `docs/screenshots/core-portrait.png`, `goal-suspension.png`.
-2. **Fixture picker** — `MATCHES` opens "CHOOSE YOUR BATTLE": segmented **LIVE / UPCOMING (8) /
-   FINISHED (109)**, SVG country flags, search, sorted by market depth. Picking **Brazil–Haiti** or
-   **France–Iraq** re-skins the entire diorama (army palettes + flags + abbreviations) from fixture
-   data. `docs/screenshots/picker.png`.
-3. **Replay scrubber** — seek anywhere in the match; play/pause; **1×/2×/4×/8×** continuous
-   fast-forward that never thins the sparkline into mush (the clock, score and events stay coherent).
-4. **Every tick inspectable → real Merkle proof** — `VERIFY` (or **tapping any War Feed event**)
-   shows the raw TxLINE state, then "**VERIFY THIS TICK ON-CHAIN**" fetches its proof and walks it in
-   plain language: **① the leaf** (the exact stat numbers) → **② the branch** (sub-tree sibling
-   hashes) → **③ the root** (computed) → **④ on-chain** (the anchored root on Solana account
-   `6d9bJ2Et…`, epoch day). Verdict **PROVEN AUTHENTIC** when `computedRoot === onChainRoot`. Tapping
-   a goal proves `key 1 = 1` — the exact number on the scoreboard. `docs/screenshots/proof.png`,
-   `tap-feed-proof.png`.
-5. **Predict-along** — during a danger spell a **⚔ RAID INCOMING** war-drum asks goal / corner /
-   nothing, showing the market's implied goal chance; the pick is **log-scored against that
-   probability** (beating an unlikely-rated call pays more), accrues a campaign total, and persists a
-   **calls / correct / accuracy / points record** shown in the wallet sheet.
-   `docs/screenshots/predict.png`, `wallet-record.png`.
-6. **Share the war** — copy a **replay deep-link** (`?fixture=&mode=&t=` restores the exact fixture +
-   moment) and **export a composed poster PNG**: the terrain + a caption band (teams, score, clock,
-   win-probability bar, "anchored TxLINE market data · proven on Solana"). `docs/screenshots/poster-frame.png`.
-7. **Wallet sign-in** — devnet identity (clearly badged **DEVNET · NO REAL FUNDS**), persisted for
-   the leaderboard.
-8. **Desktop command console** (`≥1024px`) — MATCH STATS, the ENG-WIN **probability path sparkline
-   with honest suspension gaps**, a WAR FEED of real anchored events, all coexisting with the console
-   chrome. `docs/screenshots/desktop-console.png`.
+**Data + proof (B1, B2)**
+- Every `/v1` call now goes through `@txline/client-sdk` — grep for `fetch(.*/v1)` in app code is
+  zero; the fixtures list (117), odds, state, and Merkle proof all load via the SDK.
+- Tap **VERIFY** → **VERIFY THIS TICK ON-CHAIN** proves the tick **twice, independently**: the browser
+  reconstructs the Merkle root **and reads the mainnet PDA** (`@txline/verify`, via a same-origin
+  `/rpc` proxy that strips the Origin header the public RPC 403s on), and the engine does it
+  server-side. Computed root === on-chain root === `b23f6841…`; sheet reads "PROVEN AUTHENTIC ·
+  VERIFIED TWICE".
 
-Bridge logic is covered by **36 hermetic unit/integration tests** (`node --test bridge/`, all green)
-run against recorded fixtures — mapping, the match-clock model, suspension gaps, the driver's event
-stream, and the flag/palette module.
+**Bugs (B3–B6)**
+- Stoppage/extra-time is real now: the clock reads **45+3 · H1** in first-half stoppage, **90+n** in
+  the second, **105+n / 120+n** in ET; the added-time feed shows **+3 / +11 MIN** (derived from the
+  clock model — the data doesn't carry the number). ET fixture 18202783 labels ET1/ET2 correctly.
+- Seeking is atomically in sync: scrubbing to any moment jumps the front/armies/score/clock/fog to the
+  feed at that ts (fixed a stale-front-into-fog bug); the 54' goal cinematic fires with the real side
+  ("GOAL — ENGLAND"), minute, and prob jump; forward-seeking re-fires no past goals.
+- War Room is gone from real matches (events come only from the data) and lives in a **SANDBOX** battle
+  (Astoria vs Verdania) reachable from the picker; its triggers work there.
+- Poster export + copy-link work on phone and desktop; the deep-link restores fixture + timestamp.
 
-## Architecture (what's new tonight)
+**Product (C1–C11)**
+- **Every pixel inspectable:** tapping the front chip, a threat flare, or the fog each opens the
+  inspect sheet with the real payload (de-margined 1X2 triplet / PossibleEvent / suspension window).
+- **Phantom wallet:** connect + `signMessage` sign-in (mocked in tests; **you'll want to try the real
+  Phantom flow manually**); graceful GET-PHANTOM + continue-as-guest fallback; record persists across
+  reload keyed to the pubkey.
+- **Game loop:** pick-a-side flavors the HUD; two correct predict calls in a row show **streak ×2 with
+  the multiplier applied**, a wrong call resets it; a POINTS + streak chip sits in the HUD; all survive
+  reload.
+- **Home / lobby / onboarding:** cold visit → HOME; returning → straight to the lobby; deep-links
+  (`?fixture=`) bypass HOME into the battle; 3 skippable one-time tooltips.
+- **RAID redesign:** compact lower-right (desktop: right-middle) war-drum card with the market %,
+  a countdown, auto-dismiss — never over the diorama centre.
+- **Real-time rooms:** create a room → invite deep-link; a second browser's score update lands on the
+  first's leaderboard in **~289ms**; a late joiner gets the full roster; server-down degrades to
+  "rooms offline · solo".
+- **Desktop:** the scrubber is docked between the stat/feed columns (no floating overlap at
+  1280/1440/1920); the camera orbits around the pitch centre, double-tap recenters, and **flick-to-spin**
+  is in.
+- **Picker:** ordered LIVE → upcoming(soonest) → finished(most recent); diacritic-insensitive search on
+  name/abbr/country ("arg" surfaces all 7 Argentina fixtures).
+- **Creator overlay:** `?overlay=1` renders just the diorama + a clean score/prob strip, no chrome;
+  `&bg=green|black` sets a chroma-key background.
 
-```
-battlefield/
-  driver.js            UNCHANGED synthetic driver — kept as offline/demo fallback (?mode=synthetic)
-  engine.js            UNCHANGED renderer (the prime directive)
-  index.html           HUD shell — now: async fixture load, DYNAMIC team identity (no ENG/ARG
-                       literals), window.BATTLE control+data API, frame/event subscribe, deep-links
-  bridge/
-    mapping.js         pure StatusId→phase / 1X2-Pct→prob / possession→zone / action→BattleEvent (+tests)
-    replay-source.js   ts-native replay model: match-clock model (HT frozen, H2@45:00, stoppage/ET),
-                       real prob path with honest suspension gaps at goals, event + threat timelines
-    real-driver.js     RealMatchDriver — SAME {onFrame,onEvent} + method surface as MatchDriver;
-                       virtual-clock cinematic replay + seek + a LIVE composite-SSE path
-    teams.js           64 nation army palettes + self-contained SVG flags (+ generated fallbacks)
-    __fixtures__/      recorded engine responses the tests run against (hermetic, no network)
-  app/
-    session.js         openSession() — unifies synthetic/replay/live; builds engine THEN driver
-    console.jsx        the consumer overlay (x-import): picker, scrubber, inspect+proof, predict,
-                       share, wallet — talks to the HUD only through window.BATTLE
-  vite.config.js       :4400 strictPort + /v1 proxy to the engine (same-origin, no CORS, SSE-friendly)
-```
+**Offline (D1)** — with unpkg + Google Fonts fully blocked, the app still boots, renders, and uses the
+right fonts, with **zero external requests and zero console errors**.
 
-**The one seam that changed:** `index.html` used to `new MatchDriver(...)`. It now
-`openSession({mode, fixtureId})` → loads the replay model → builds the engine with the fixture's
-palette → starts a `RealMatchDriver` bound to that model. Everything downstream (HUD, War Room,
-`window.BF`) is unchanged because the new driver keeps the identical callback + method surface.
-
-**Data sources used** (all via the same-origin `/v1` proxy):
-`GET /v1/fixtures?status=all` (picker) · `GET /v1/fixtures/:id` (teams, phases, event timeline) ·
-`GET /v1/fixtures/:id/odds?market=1X2_PARTICIPANT_RESULT` (the de-margined prob path) ·
-`GET /v1/fixtures/:id/state?ts=` (inspect payload) ·
-`GET /v1/validation/scores?fixtureId=&seq=&statKeys=&verify=1` (the Merkle proof + on-chain verdict) ·
-`GET /v1/stream/fixtures/:id` (live mode).
+---
 
 ## Honest rough edges
 
-- **`vite build` is not the deploy path** — the DC runtime + x-import .jsx are runtime-fetched, not
-  bundled. Run with **`npm run dev`**. Static-deploying needs a copy step + a reachable engine origin
-  (see `BLOCKED.md` #1/#2). The engine is local-only, so a public link needs it tunnelled.
-- **CDN dependency** — React/Babel/fonts load from unpkg + Google Fonts; **no network ⇒ white screen**.
-  The data feed is same-origin; only the libs are at risk. Vendor them before an unreliable-Wi-Fi demo.
-- **Live mode is smoke-tested, not match-tested** — verified it connects/streams/renders; not yet run
-  against a genuinely live match (none tonight). Replay is the judged weapon regardless.
-- **Merkle proof uses the engine's `verify=1` endpoint** (server-side reconstruction + on-chain
-  compare), not browser-side `@txline/verify`. Same cryptographic guarantee; the SDK path is a
-  documented enhancement.
-- **Live stats** (possession %, shots, danger time) are still computed client-side from frames, as in
-  the prototype — the engine's per-player/period-bucketed stats aren't surfaced yet.
-- **Momentum / ambient possession are derived**, not read from the feed (the bridge spec always
-  intended this); they're biased toward the side the data favours so they never contradict the market.
-- Desktop is functional "smoke" quality — the portrait phone layout is the polished primary target.
+- **Live mode is still smoke-tested, not match-tested** — no live match ran during the build. Replay is
+  the judged weapon; the live path lights up at the final (Sun 19:00 UTC).
+- **The browser proof read uses a `/rpc` proxy on the dev server** (strips the Origin the public mainnet
+  RPC 403s on). It's dev-server-only, same as `/v1` — fine for the demo, and it degrades to engine-only
+  if the browser path ever fails.
+- **The "pick your side" prompt is a modal** — on a fresh visit it briefly covers the screen until you
+  pick a side or "just watching". Intended, but worth knowing when you record (dismiss it first).
+- **The War Room panel keeps its light "tweaks" styling** (it's the DC editor panel). Functional; I
+  left its look alone since it's a sandbox tool.
+- **Rooms + browser-verify need their servers/network up** — see run commands. A room WebSocket that
+  can't reach the server logs one unavoidable browser "WebSocket failed" console line (only when the
+  rooms server is down); the app stays playable in solo mode.
+- **A real deployed link + repo push are still yours to run** — I did not push or tunnel. The exact
+  runbook is in `BLOCKED.md §0` (honest: `cloudflared` isn't installed — `brew install cloudflared` or
+  the zero-install `npx localtunnel` fallback; one tunnel over :4400 exposes everything).
+
+---
 
 ## Run commands
 
 ```bash
-# 0. the engine must be up (it already is): curl -s localhost:3001/health  → {"ok":true}
+# 0. engine must be up (it already is):  curl -s localhost:3001/health  → {"ok":true}
 cd /Users/mikail/Desktop/PulsePlay/battlefield
-npm install            # already done; installs Vite + the two SDK tarballs
-npm run dev            # → http://localhost:4400  (LAN URL printed for phone testing)
-npm test               # node --test bridge/  → 36 passing
 
-# deep-links
-#   http://localhost:4400/?fixture=18241006&mode=replay      the ENG–ARG final (default, richest arc)
-#   pick any of the other 115 from the MATCHES picker (e.g. Canada 6–0 Qatar, Brazil 3–0 Haiti)
-#   http://localhost:4400/?mode=synthetic                    offline fallback (no engine needed)
-#   ...&dur=120                                              faster full-match playback (default 210s)
+npm run dev            # → http://localhost:4400   (the app; LAN URL printed for phone)
+npm run rooms          # → :4490   (friend-rooms WebSocket sidecar — needed for C10)
+npm test               # node --test bridge/ rooms/   → 43 passing
+
+# Routes / deep-links
+#   http://localhost:4400/                                  cold visit → HOME → lobby
+#   http://localhost:4400/?fixture=18241006&mode=replay     the ENG–ARG final, straight in
+#   ...&t=<ms>                                              restore an exact moment (share links)
+#   ...&room=CODE                                           join a friend room
+#   http://localhost:4400/?overlay=1&bg=green               creator/second-screen (green screen)
+#   http://localhost:4400/?overlay=1&bg=black               creator overlay (black)
+#   http://localhost:4400/?dur=90                            faster full-match playback (default 210s)
+#   pick "SANDBOX ARENA" in the match picker for the War Room playground
 ```
 
-Open the printed **Network** URL on a phone in **portrait** (primary), or a desktop ≥1024px for the
-command console.
+Currently running: engine `:3001`, dev server `:4400`, rooms sidecar `:4490` — all healthy.
 
-## 3-beat demo script (~90s)
+---
 
-1. **"The match, as the market lives it."** Land on the England–Argentina final. Hit **4×** and let
-   the battle play: England's line surges as their win-probability leaps ~37→64% (peak ~69%) at the 54' goal, the
-   market suspends (fog), then Argentina claw it back and overrun England at full time — every troop,
-   every metre of trench is the real de-margined probability moving.
-2. **"Every pixel is provable."** Pause, tap **VERIFY** → the raw tick → **VERIFY THIS TICK ON-CHAIN**
-   → the leaf → root → **the Solana account that anchored it**, computed root === on-chain root,
-   **PROVEN AUTHENTIC**. No other fan app can do this, because no other feed is provable.
-3. **"Play along, then share it."** Scrub back into a danger spell → **RAID INCOMING** → call the
-   goal, beat the market, bank the points. Open **MATCHES** to show all 116 battles (Brazil–Haiti,
-   France–Iraq, Canada–Qatar) one tap away, then **share** a replay link + poster of the terrain at
-   full time.
+## Demo script (~2 min, 4 beats)
+
+1. **"The market, as a war."** Land on HOME → *continue as guest* → CHOOSE YOUR BATTLE → the England–
+   Argentina final. **Pick England.** Hit 4× and let it play: England's line surges as their win-prob
+   leaps ~37→64% at the 54' goal (the real de-margined jump), the market suspends (fog rolls in), then
+   Argentina claw it back and overrun at full time. The clock shows real stoppage (45+3, 90+n).
+
+2. **"Every pixel is provable — twice."** Pause, tap the **fog** (or the **VERIFY** button) → the raw
+   TxLINE tick → **VERIFY THIS TICK ON-CHAIN**: your browser reconstructs the Merkle root and reads the
+   Solana account, the engine does it independently — **PROVEN AUTHENTIC · VERIFIED TWICE**. No other
+   fan app can do this, because no other feed is provable.
+
+3. **"Play along, build a streak."** Scrub into a danger spell → the compact **RAID** war-drum shows the
+   market's goal chance → call it, beat the market, watch the **streak ×2** multiplier and points climb
+   in the HUD. Tap **SHARE → CREATE A ROOM**, open the invite link in a second window — your calls show
+   on the live leaderboard in real time.
+
+4. **"Take it anywhere."** Open **MATCHES** to show all 116 battles one tap away (search "arg"), then
+   `?overlay=1&bg=green` — the same battle as a clean green-screen creator overlay (the monetization
+   story), and note it all runs offline with the deps vendored.
