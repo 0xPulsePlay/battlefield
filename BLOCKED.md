@@ -2,6 +2,63 @@
 
 None of these blocked the build; each was worked around and is documented for you.
 
+---
+
+## 0. DEPLOY RUNBOOK — the "working link" (Mikail-only; do NOT run in the build)
+
+The whole app is same-origin behind the :4400 dev server: it proxies `/v1` → the engine
+(:3001), `/rpc` → Solana mainnet (for the browser proof check), and `/rooms` → the rooms
+sidecar (:4490). So one tunnel over :4400 exposes everything — no static build needed
+(`vite build` can't bundle the DC runtime; see #1).
+
+```bash
+# 0. keep these running on this Mac (all already up during the build):
+curl -s localhost:3001/health   # engine → {"ok":true}
+#    battlefield dev server:  cd battlefield && npm run dev     (→ :4400)
+#    rooms sidecar (C10):     cd battlefield && npm run rooms   (→ :4490)
+
+# 1. install a tunnel (NEITHER cloudflared NOR ngrok is currently on PATH; brew IS):
+brew install cloudflared        # ~1 min, one time
+
+# 2. expose :4400 publicly (no account/login needed for a quick tunnel):
+cloudflared tunnel --url http://localhost:4400
+#    → prints  https://<random>.trycloudflare.com  — THAT is the deployed link judges test.
+#    /v1, /rpc, /rooms (incl. the WebSocket) all ride through it same-origin. WebSockets
+#    work over cloudflared by default.
+
+# ZERO-INSTALL FALLBACK (if you can't/don't want to brew): localtunnel via npx —
+#    npx --yes localtunnel --port 4400
+#    → prints a https://<sub>.loca.lt URL (shows a one-time click-through interstitial;
+#    the tunnel password is this Mac's public IP, from https://loca.lt/mytunnelpassword ).
+```
+Notes: the link lives only while this Mac + those three processes stay up. Off-match the
+demo is the tick-by-tick REPLAY (the judged weapon); the live path lights up at the final
+(Sun 19:00 UTC). Repo push + demo-video recording are also Mikail-only. (I did NOT install
+a tunnel or run it — per the operating contract that's your call.)
+
+## 0b. Compliance sweep (B7 — checked against txline-explorer/HACKATHON-MUST-INCLUDES.md)
+
+Track 2 (Consumer & Fan). Status of each must-include:
+- **NO TxL-token P2P** — CONFIRMED clean: grep finds no wager/escrow/deposit/payout/TxL-token
+  path. Predict-along is a **points-only skill game** (log-scored vs the market's implied
+  probability); the wallet is **identity-only** (no funds). Nothing is staked.
+- **DevNet / real-vs-sim labelling** — present everywhere: wallet sheet "DEVNET · NO REAL
+  FUNDS", mode badge REPLAY/LIVE/SANDBOX, proof "read-only, no wallet, no gas".
+- **TxLINE as live/primary input** — yes: de-margined 1X2 `Pct` drives the front, scores +
+  event timeline drive the diorama, `/v1/validation/scores` + browser `@txline/verify` prove
+  every tick. All data via `@txline/client-sdk` (B1).
+- **Merkle-proof verification** — B2: verified twice (browser `@txline/verify` reconstructs the
+  root + reads the mainnet PDA; engine `verify=1` independently). Both shown in the inspect sheet.
+- **"Sign up through Solana" (wallet auth)** — CLOSED by C2 (real Phantom `window.phantom.solana`
+  connect + signMessage); guest fallback retained. [see C2 status]
+- **Every-pixel-inspectable** — CLOSED by C1 (tap flare / fog / frontline → real payload). [see C1]
+- **Monetization path** — the `?overlay=1` creator/second-screen route (C11) is the story.
+- Endpoints used (for the tech-doc): `/v1/fixtures`, `/v1/fixtures/:id`, `/v1/fixtures/:id/odds`,
+  `/v1/fixtures/:id/state`, `/v1/validation/scores`, `/v1/stream/fixtures/:id`, plus mainnet
+  `getAccountInfo` on the `daily_scores_roots` PDA via `@txline/verify`.
+
+---
+
 ## 1. Production `vite build` does not produce a runnable bundle (run via dev server)
 **What:** `npm run build` emits a partial `dist/` (index.html + engine/teams chunks) but **omits**
 `support.js` (the "Claude Design" runtime, a non-module `<script>`) and the `.jsx` components loaded
@@ -58,11 +115,13 @@ streams, and renders without error. It has **not** been exercised against a genu
 (none is running — the final is Sun 19:00 UTC). Off-match, `since=0` replays the whole log unpaced;
 during a live match it tails in real time (the intended behavior). Replay mode is the demo weapon.
 
-## 5. Client-side `@txline/verify` not wired (engine endpoint used instead)
-**What:** the Merkle proof walk fetches `/v1/validation/scores?...&verify=1`, which runs the proof
-reconstruction **and the on-chain root comparison server-side** and returns the verdict + proof
-nodes. This is real cryptographic verification (computed root === the root Solana anchored), just
-performed by the engine rather than by `@txline/verify` in the browser.
-**Why:** browser-side `@txline/verify` needs `@solana/web3.js` + a Buffer polyfill + a mainnet RPC
-from the page — more fragile for a live demo. The tarball is installed (`node_modules/@txline/verify`)
-and could be wired as an independent second check; left as a documented enhancement.
+## 5. Client-side `@txline/verify` — RESOLVED (B2, 2026-07-19)
+**Was:** the proof walk used only the engine's `/v1/validation/scores?...&verify=1` (server-side
+reconstruction + on-chain compare). Browser-side `@txline/verify` was left as an enhancement because
+it needs `@solana/web3.js` + a Buffer polyfill + a mainnet RPC from the page.
+**Now:** `app/verify.js` (lazy-imported on the verify tap, so web3 never touches page load) runs
+`verifyScoresStatProofOnChain` in the browser: it reconstructs the fixture-summary root client-side
+and reads the mainnet `daily_scores_roots` PDA READ-ONLY, then the inspect sheet shows BOTH verdicts
+("verified twice — in your browser AND by the engine"). Buffer via `app/buffer-shim.js`; the mainnet
+RPC is same-origin through a `/rpc` Vite proxy that strips Origin/Referer (the public endpoint 403s
+browser-origin `getAccountInfo`). Verified: browser computed root === on-chain root === engine root.
