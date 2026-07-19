@@ -6,15 +6,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host --port 4400 --strictPort",
+    "rooms": "node rooms/server.js",
     "build": "vite build",
     "preview": "vite preview --port 4400 --strictPort",
-    "test": "node --test bridge/"
+    "test": "node --test bridge/ rooms/"
   },
   "devDependencies": {
     "vite": "^6.0.0"
   },
   "dependencies": {
     "@txline/client-sdk": "file:../.nightshift/vendor/txline-client-sdk-0.1.0.tgz",
-    "@txline/verify": "file:../.nightshift/vendor/txline-verify-0.1.0.tgz"
+    "@txline/verify": "file:../.nightshift/vendor/txline-verify-0.1.0.tgz",
+    "ws": "^7.5.13"
   }
 }

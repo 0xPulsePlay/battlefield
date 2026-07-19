@@ -25,6 +25,12 @@ export default defineConfig({
           proxy.on('proxyReq', (proxyReq) => proxyReq.setHeader('accept-encoding', 'identity'));
         },
       },
+      // Friend-rooms WebSocket sidecar (C10) — same-origin so the page never needs CORS.
+      '/rooms': {
+        target: process.env.ROOMS_URL || 'http://localhost:4490',
+        ws: true,
+        changeOrigin: true,
+      },
       // Same-origin Solana mainnet RPC for the browser-side @txline/verify check.
       // The public endpoint 403s any request carrying a browser Origin/Referer, so
       // we proxy server-side (like /v1) AND strip those headers so mainnet sees a
