@@ -41,8 +41,7 @@ data is real, because no other feed is provable.
 
 ### TxLINE (TxODDS) endpoints ingested by our platform layer
 
-Our team built a shared ingestion platform (the `txline-explorer` engine) that all our
-submissions consume. It ingests and folds:
+Our team built a shared ingestion platform that all our submissions consume. It ingests and folds:
 
 | TxLINE endpoint | Used for |
 |---|---|
@@ -81,7 +80,7 @@ product.
 ## Architecture
 
 ```
-TxODDS TxLINE API ──▶ platform engine (:3001, txline-explorer)
+TxODDS TxLINE API ──▶ platform engine (:3001)
                           │  REST /v1 + resumable composite SSE
                           ▼
                 @txline/client-sdk  (typed REST + resumable SSE)

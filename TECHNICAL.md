@@ -125,9 +125,8 @@ out and there is no battlefield.
 
 ### Upstream TxODDS endpoints the shared platform ingests
 
-Our team built one shared ingestion platform (the `txline-explorer` engine) that all our
-submissions consume through the `/v1` surface above. For completeness, the raw TxODDS endpoints that
-platform folds (documented in `BRIDGE-NOTES.md` and `docs/SUBMISSION-TECH.md`) are: the SSE-framed
+Our team built one shared ingestion platform that all our submissions consume through the `/v1`
+surface above. For completeness, the raw TxODDS endpoints that platform folds are: the SSE-framed
 `GET /api/scores/updates/{fixtureId}` full sequence (complete score/event/possession history, every
 update carrying the full period-bucketed `Stats`), the `GET /api/odds/snapshot/{fixtureId}` +
 interval-update odds corpus (`1X2_PARTICIPANT_RESULT` de-margined `Pct` among them), the live
@@ -139,7 +138,7 @@ program accounts.
 ## Architecture
 
 ```
-TxODDS TxLINE API ──▶ platform engine (txline-explorer, :3001 dev / txline-api.gershwin.dev)
+TxODDS TxLINE API ──▶ platform engine (:3001 dev · txline-api.gershwin.dev)
                           │  REST /v1  +  resumable composite SSE
                           ▼
                 @txline/client-sdk  (typed REST + resumable SSE — app/data.js is the sole importer)
