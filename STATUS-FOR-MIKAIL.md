@@ -1,11 +1,31 @@
 # Battlefield — Final-Round handoff (2026-07-19)
 
+## Round 2 (§G) — your post-review polish, done
+
+After your hands-on review ("really cool … but mobile is jumbled and gobbled"), I did the §G pass:
+- **G1 — room usernames:** a "YOU" name field in the share sheet (pre-filled, editable, ≤20 chars,
+  persisted, broadcast); rename propagates live. Verified: A/B set Alice/Bob, both see both; A→Alicia
+  updates for B. Also renameable inline from the room panel (pencil).
+- **G2 — desktop:** the points/streak chip now sits directly above the RAID card (20px gap) so the
+  stake and payoff read as one moment; no overlap with the console columns at 1440.
+- **G3 — mobile frontline chip:** the bare "ENG 36%" is now a labelled **"FRONTLINE ODDS / ENG 36%"**
+  tab, so it says what it does.
+- **G4 — mobile composition (the big one):** nav auto-compacts under 420px (keeps the flags + a ▾,
+  drops the "MATCHES" word) so it fits 360/402/430 without clipping; **points + "for ENG" moved to the
+  bottom-right** (out of the score, filling the old empty gap); the **room leaderboard is now a tiny
+  top-left pill** (member count + your rank) that clears the centred score and expands to the full
+  roster only when tapped. Verified with Playwright screenshots at 360/402/430 — no overlaps, score
+  fully visible, zero console errors through a full cold journey.
+
+Round-2 HEAD is **`b2ffc3f`**; `npm test` = **44/44** (added the rename test). Everything below (the
+final-round build) still stands.
+
 ## TL;DR
 
 The final-round spec (`.nightshift/specs/05b-battlefield-final-round.md`) is **fully built** —
 every P0 (B1–B7) and every P1 (C1–C11) item, plus the P2 (D1). All 14 items were verified in
 Playwright (phone-portrait first) with **zero console errors**, and each shipped as its own commit.
-Base was `7ec691b`; HEAD is **`1d5d2f9`**. `npm test` = **43/43** (37 bridge + 6 rooms).
+Base was `7ec691b`. `npm test` = **44/44** (37 bridge + 7 rooms, incl. G1 rename).
 
 Biggest change vs the last handoff: the app now runs entirely through the **SDKs** (data via
 `@txline/client-sdk`, on-chain proof verified **twice** — once in your own browser via
