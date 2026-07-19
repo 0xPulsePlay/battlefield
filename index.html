@@ -177,6 +177,23 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-ra
     <!-- desktop transport lives in the docked console scrubber (see app/console.jsx) -->
   </sc-if>
 
+  <!-- ====== CREATOR / SECOND-SCREEN OVERLAY (?overlay=1) ====== -->
+  <sc-if value="{{ overlayUI }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; top:0; left:0; right:0; display:flex; flex-direction:column; align-items:center; padding:22px 18px 0; pointer-events:none; z-index:20;">
+      <div style="font-size:11px; font-weight:600; letter-spacing:4px; color:rgba(255,255,255,.72); text-shadow:0 1px 4px rgba(0,0,0,.6);">{{ headerLabel }}</div>
+      <div style="margin-top:7px; font-size:36px; font-weight:600; letter-spacing:3px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.7);">{{ scoreText }}</div>
+      <div style="margin-top:4px; font-size:13px; font-weight:500; letter-spacing:2px; color:rgba(255,255,255,.82); text-shadow:0 1px 5px rgba(0,0,0,.6);">{{ clockText }}</div>
+      <div style="margin-top:12px; width:min(520px, 78vw); display:flex; gap:8px;">
+        <sc-for list="{{ probBoxes }}" as="bx" hint-placeholder-count="3">
+          <div style="flex:1; background:rgba(6,9,7,.62); border:1px solid rgba(255,255,255,.14); border-top:2px solid {{ bx.accent }}; border-radius:9px; padding:7px 6px 8px; text-align:center; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);">
+            <div style="font-size:9px; font-weight:600; letter-spacing:2px; color:rgba(255,255,255,.65);">{{ bx.lbl }}</div>
+            <div style="margin-top:2px; font-size:19px; font-weight:700; color:#fff;">{{ bx.val }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- ====== BANNER / REPLAY OVERLAYS ====== -->
   <sc-if value="{{ bannerShow }}" hint-placeholder-val="{{ false }}">
     <!-- compact strip in the upper third — the battlefield stays visible behind it -->
@@ -264,6 +281,14 @@ class Component extends DCLogic {
     this._baseUrl = params.get('api') || sessionMod.DEFAULT_BASE_URL;
     // one @txline/client-sdk client for the whole HUD (data helpers + sessions).
     this._client = dataMod.makeClient(this._baseUrl);
+    // creator/second-screen overlay route: ?overlay=1 → no HUD chrome, no interactions,
+    // just the diorama + a minimal score strip on a chroma-key-friendly background.
+    this._overlay = params.get('overlay') === '1';
+    this._stageBg = this._overlay ? (params.get('bg') === 'black' ? '#000000' : '#00b140') : null;
+    if (this._overlay) {
+      document.documentElement.style.background = this._stageBg;
+      if (document.body) document.body.style.background = this._stageBg;
+    }
     this._replayDur = params.get('dur') ? +params.get('dur') : 210;
     const mode = params.get('mode') || 'replay';
     const fixtureId = +(params.get('fixture')) || sessionMod.DEFAULT_FIXTURE;
@@ -350,7 +375,7 @@ class Component extends DCLogic {
     this.engine && this.engine.destroy();
     const cv = this.canvasRef.current;
     this.engine = new this._BattleEngine(cv, {
-      teams: sess.engineTeams, names: sess.names,
+      teams: sess.engineTeams, names: sess.names, stageBg: this._stageBg,
       onBanner: (b) => this._banner(b),
       onChip: (side) => this.setState(s => ({ tenMen: { ...s.tenMen, [side]: true } })),
       onSfx: (n, g) => this._sfx(n, g),
@@ -641,9 +666,11 @@ class Component extends DCLogic {
     ];
     const modeLive = s.replayMode === 'live';
     const modeSandbox = s.replayMode === 'sandbox' || s.replayMode === 'synthetic';
+    const overlay = !!this._overlay;
     return {
       canvasRef: this.canvasRef, sparkRef: this.sparkRef,
-      isPortraitUI: !s.isDesktop, isDesktop: s.isDesktop, landscapeHint: s.landscapeHint,
+      isPortraitUI: !s.isDesktop && !overlay, isDesktop: s.isDesktop && !overlay, overlayUI: overlay,
+      landscapeHint: s.landscapeHint && !overlay,
       scoreText: s.scoreText, clockText: s.clockText, utcText: s.utcText,
       suspended: s.suspended, suspendSecs: s.suspendSecs,
       probBoxes,
@@ -661,7 +688,7 @@ class Component extends DCLogic {
       onOverlayClose: () => this.setState({ overlay: null }),
       playLabel: s.playing ? '❚❚' : '▶', speedLabel: `${s.speed}×`,
       soundLabel: s.sound ? 'SND ON' : 'SND OFF', soundColor: s.sound ? '#d3ab48' : 'rgba(210,220,205,.55)',
-      bannerShow: !!s.banner, bannerTitle: s.banner?.title || '', bannerSub: s.banner?.sub || '',
+      bannerShow: !!s.banner && !overlay, bannerTitle: s.banner?.title || '', bannerSub: s.banner?.sub || '',
       bannerAccent: s.banner ? ({ home: '#d3273e', away: '#f2b705', neutral: '#d3ab48' })[s.banner.tone] || '#d3ab48' : '#d3ab48',
       replayShow: s.replayShow,
       loadingShow: s.loading,

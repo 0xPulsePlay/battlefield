@@ -1012,7 +1012,11 @@
   }
 
   // ── root ──────────────────────────────────────────────────────────────────
+  // The creator overlay route (?overlay=1) shows ONLY the diorama + score strip
+  // (rendered by index.html) — no console chrome, no interactions.
+  const IS_OVERLAY = (() => { try { return new URLSearchParams(location.search).get('overlay') === '1'; } catch { return false; } })();
   function BattleConsole() {
+    if (IS_OVERLAY) return null;
     const [ready, setReady] = useState(!!window.BATTLE);
     const [sheet, setSheet] = useState(null);
     const [inspectSubject, setInspectSubject] = useState(null);

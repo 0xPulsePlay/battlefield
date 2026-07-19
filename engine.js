@@ -684,7 +684,8 @@ export class BattleEngine {
     this._shx = (Math.random() - 0.5) * this.shake; this._shy = (Math.random() - 0.5) * this.shake;
     this._cr = Math.cos(this.cam.rot); this._sr = Math.sin(this.cam.rot);
     this._applyTilt();
-    ctx.fillStyle = COL.stage; ctx.fillRect(0, 0, W, H);
+    // opts.stageBg lets the creator-overlay route (?overlay=1&bg=) key on a solid colour
+    ctx.fillStyle = this.opts.stageBg || COL.stage; ctx.fillRect(0, 0, W, H);
     // ground glow
     const gc = this._p(0, 0.5, 0);
     let gr = ctx.createRadialGradient(gc.x, gc.y, 10, gc.x, gc.y, Math.max(W, H) * 0.62);
