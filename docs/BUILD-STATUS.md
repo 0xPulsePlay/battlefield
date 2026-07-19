@@ -22,7 +22,7 @@ main broken. Playwright-verify each phase phone-portrait (402×874) first.
 | ID | Acceptance criterion | Status |
 |---|---|---|
 | B1 | `grep -rn "fetch(.*/v1"` (app code, excl node_modules/fixtures) → **zero** hits; all bridge tests green; full replay journey plays in Playwright | **PASS** — grep=0; 36/36 tests; Playwright: data.js loaded, /v1 fixture+odds+fixtures(117)+proof all via SDK, computed root===chain (b23f6841), playback advances, 0 console errors |
-| B2 | Browser-side `@txline/verify` walks the Merkle proof; browser-computed root matches on-chain; engine `verify=1` shown as independent 2nd check; zero console errors | PENDING |
+| B2 | Browser-side `@txline/verify` walks the Merkle proof; browser-computed root matches on-chain; engine `verify=1` shown as independent 2nd check; zero console errors | **PASS** — app/verify.js (lazy, buffer-shim) + `/rpc` proxy (strips Origin, which mainnet 403s). Playwright: browser_verified=true, browser computed===chain===engine (b23f6841), 531ms, sheet shows "VERIFIED TWICE" + both checks ✓, 0 console errors |
 | B3 | Extra/stoppage time no longer always 0 — replay of a fixture with known stoppage shows non-zero added minutes at the right times; ET periods labeled correctly | PENDING |
 | B4a | Playback sync: at the ENG–ARG 54' goal, banner side/minute match the fixture event payload; prob boxes match the odds series at that ts; fog onset aligns with recorded suspension (±1 tick) | PENDING |
 | B4b | Seek sync: Playwright seeks to 3 timestamps (pre-goal, HT, late); engine frame state (front, score, clock, fog flag) matches the feed at each ts; no stale/replayed cinematics | PENDING |

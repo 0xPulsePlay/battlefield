@@ -168,6 +168,7 @@
     const [phase, setPhase] = useState('loading'); // loading|state|proof|error
     const [state, setState] = useState(null);
     const [proof, setProof] = useState(null);
+    const [browser, setBrowser] = useState(null); // { status:'pending'|'ok'|'error', res?, err? }
     const [err, setErr] = useState(null);
     useEffect(() => {
       const load = (seq != null && B().stateAtSeq) ? B().stateAtSeq(seq) : B().stateAtTs(B().headTs ? B().headTs() : 0);
@@ -175,7 +176,20 @@
     }, []);
     const verify = async () => {
       setPhase('proof-loading');
-      try { const p = await B().proof(state.seq, [1, 2], true); setProof(p); setPhase('proof'); }
+      try {
+        const p = await B().proof(state.seq, [1, 2], true);
+        setProof(p); setPhase('proof');
+        // fire the INDEPENDENT browser-side check in parallel (reconstructs the root
+        // in-page + reads the mainnet PDA; slower, so the engine verdict shows first).
+        setBrowser({ status: 'pending' });
+        if (B().verifyBrowser && p && p.proof) {
+          B().verifyBrowser(p.proof)
+            .then((res) => setBrowser({ status: 'ok', res }))
+            .catch((e) => setBrowser({ status: 'error', err: String((e && e.message) || e) }));
+        } else {
+          setBrowser({ status: 'error', err: 'browser verify unavailable' });
+        }
+      }
       catch (e) { setErr(String(e.message || e)); setPhase('error'); }
     };
     const hex = (arr) => (arr || []).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16) + '…';
@@ -197,7 +211,7 @@
                 <button onClick={verify} style={{ marginTop: 14, width: '100%', padding: '12px', fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#0d0b05', background: GOLD, border: 'none', borderRadius: 10, cursor: 'pointer' }}>VERIFY THIS TICK ON-CHAIN →</button>
               )}
               {phase === 'proof-loading' && <Muted>Fetching Merkle proof + reading the Solana account…</Muted>}
-              {phase === 'proof' && proof && <ProofWalk proof={proof} hex={hex} />}
+              {phase === 'proof' && proof && <ProofWalk proof={proof} browser={browser} hex={hex} />}
             </div>
           )}
         </div>
@@ -205,25 +219,56 @@
     );
   }
 
-  function ProofWalk({ proof, hex }) {
+  function ProofWalk({ proof, browser, hex }) {
     const oc = proof.onChain || {};
-    const ok = oc.verified;
+    const br = browser && browser.status === 'ok' ? browser.res : null;
+    const engineOk = !!oc.verified;
+    const browserOk = !!(br && br.verified);
+    const bothOk = engineOk && browserOk;
+    const ok = engineOk; // the diorama already drew this tick; engine is the primary verdict
+    // Prefer the browser-reconstructed roots for the walk once they land (they are what
+    // the viewer's own machine computed); fall back to the engine's until then.
+    const computedHex = (br && br.computedRootHex) || oc.computedRootHex;
+    const chainHex = (br && br.onChainRootHex) || oc.onChainRootHex;
+    const subOk = br ? br.subTreeVerified : oc.subTreeVerified;
+    const pda = (br && br.pda) || oc.pda || '';
+    const epochDay = (br && br.epochDay) != null ? br.epochDay : oc.epochDay;
+    const programId = (br && br.programId) || oc.programId || '';
     const leaves = (proof.proof && proof.proof.statsToProve) || oc.statsToProve || [];
     const steps = [
       ['①', 'THE LEAF', `${leaves.length} stat ${leaves.length === 1 ? 'leaf' : 'leaves'} — the exact numbers on screen`, leaves.map((s) => `key ${s.key} = ${s.value}`).join(' · ') || '—'],
-      ['②', 'THE BRANCH', 'sibling hashes fold the leaf up the sub-tree', `${(proof.proof && proof.proof.subTreeProof ? proof.proof.subTreeProof.length : 0)} sub-tree nodes → sub-root ${oc.subTreeVerified ? '✓' : '✗'}`],
-      ['③', 'THE ROOT', 'the main tree gives one root for the whole 5-min batch', `computed ${hex(hexToBytes(oc.computedRootHex))}`],
-      ['④', 'ON-CHAIN', `anchored on Solana account ${(oc.pda || '').slice(0, 6)}… (epoch day ${oc.epochDay})`, `chain root ${hex(hexToBytes(oc.onChainRootHex))}`],
+      ['②', 'THE BRANCH', 'sibling hashes fold the leaf up the sub-tree', `${(proof.proof && proof.proof.subTreeProof ? proof.proof.subTreeProof.length : 0)} sub-tree nodes → sub-root ${subOk ? '✓' : '✗'}`],
+      ['③', 'THE ROOT', br ? 'YOUR browser folded the summary into one root' : 'the main tree gives one root for the whole 5-min batch', `computed ${hex(hexToBytes(computedHex))}`],
+      ['④', 'ON-CHAIN', `anchored on Solana account ${(pda || '').slice(0, 6)}… (epoch day ${epochDay})`, `chain root ${hex(hexToBytes(chainHex))}`],
     ];
+    // the two independent checks
+    const browserLine = browser == null ? null
+      : browser.status === 'pending' ? { c: DIM, t: 'IN YOUR BROWSER', d: 'reconstructing the root + reading Solana…', mark: '◌' }
+      : browser.status === 'error' ? { c: '#e8c98a', t: 'IN YOUR BROWSER', d: 'RPC unreachable — engine verdict stands', mark: '—' }
+      : browserOk ? { c: '#7ed992', t: 'IN YOUR BROWSER', d: 'computed root === the root Solana anchored', mark: '✓' }
+      : { c: '#e88a8a', t: 'IN YOUR BROWSER', d: br.failureMode || 'roots did not match', mark: '✗' };
+    const engineLine = { c: engineOk ? '#7ed992' : '#e88a8a', t: 'BY THE ENGINE', d: engineOk ? 'server reconstructed the same root independently' : (oc.failureMode || 'roots did not match'), mark: engineOk ? '✓' : '✗' };
+    const Check = ({ ln }) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'rgba(255,255,255,.03)', border: `1px solid ${LINE}`, marginBottom: 6 }}>
+        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: ln.c, width: 14, textAlign: 'center' }}>{ln.mark}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: 1.5, color: INK }}>{ln.t}</div>
+          <div style={{ fontSize: 9, color: DIM }}>{ln.d}</div>
+        </div>
+      </div>
+    );
     return (
       <div style={{ marginTop: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, background: ok ? 'rgba(126,217,146,.12)' : 'rgba(232,138,138,.12)', border: `1px solid ${ok ? 'rgba(126,217,146,.4)' : 'rgba(232,138,138,.4)'}`, marginBottom: 12 }}>
           <span style={{ fontSize: 18 }}>{ok ? '🛡' : '⚠'}</span>
           <div>
-            <div style={{ fontFamily: COND, fontSize: 15, fontWeight: 700, letterSpacing: 1, color: ok ? '#a8e8ba' : '#f0b0b0' }}>{ok ? 'PROVEN AUTHENTIC' : 'PROOF INCOMPLETE'}</div>
-            <div style={{ fontSize: 9, color: DIM, letterSpacing: .5 }}>{ok ? 'computed root === the root Solana anchored' : (oc.failureMode || 'roots did not match')}</div>
+            <div style={{ fontFamily: COND, fontSize: 15, fontWeight: 700, letterSpacing: 1, color: ok ? '#a8e8ba' : '#f0b0b0' }}>{ok ? (bothOk ? 'PROVEN AUTHENTIC · VERIFIED TWICE' : 'PROVEN AUTHENTIC') : 'PROOF INCOMPLETE'}</div>
+            <div style={{ fontSize: 9, color: DIM, letterSpacing: .5 }}>{bothOk ? 'independently confirmed in your browser AND by the engine' : ok ? 'computed root === the root Solana anchored' : (oc.failureMode || 'roots did not match')}</div>
           </div>
         </div>
+        {browserLine && <Check ln={browserLine} />}
+        <Check ln={engineLine} />
+        <div style={{ height: 6 }} />
         {steps.map(([n, t, d, val], i) => (
           <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < 3 ? `1px solid ${LINE}` : 'none' }}>
             <span style={{ flex: '0 0 auto', fontFamily: COND, fontSize: 17, color: GOLD, width: 18 }}>{n}</span>
@@ -234,7 +279,7 @@
             </div>
           </div>
         ))}
-        <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.4)', paddingTop: 10 }}>TxLINE scores proof · verified against Solana oracle {(oc.programId || '').slice(0, 8)}… · read-only, no wallet, no gas</div>
+        <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.4)', paddingTop: 10 }}>TxLINE scores proof · verified against Solana oracle {(programId || '').slice(0, 8)}… · read-only, no wallet, no gas</div>
       </div>
     );
   }

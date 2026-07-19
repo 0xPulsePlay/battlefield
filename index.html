@@ -309,6 +309,12 @@ class Component extends DCLogic {
       },
       proof: (seq, statKeys = [1, 2], verify = true) =>
         this._client.validateScores(this.state.fixtureId, seq, statKeys, { verify }),
+      // browser-side @txline/verify (lazy: pulls web3 only on demand). Takes the
+      // engine response's `.proof` object; returns the SDK's structured verdict.
+      verifyBrowser: async (engineProof) => {
+        const m = this._verifyMod || (this._verifyMod = await import('./app/verify.js'));
+        return m.verifyProofInBrowser(engineProof);
+      },
       stateAtTs: (ts) => this._client.state(this.state.fixtureId, { ts: Math.round(ts) }),
       stateAtSeq: (seq) => this._client.state(this.state.fixtureId, { seq }),
       // current wall-clock ts of the replay head (for proof/state lookups + share links)
