@@ -497,6 +497,17 @@
   function getPhantom() {
     try { return (window.phantom && window.phantom.solana) || (window.solana && window.solana.isPhantom ? window.solana : null); } catch { return null; }
   }
+  // connect + sign-in-with-Solana (no funds, no gas). Returns the pubkey or throws.
+  async function phantomSignIn() {
+    const prov = getPhantom(); if (!prov) throw new Error('no-phantom');
+    const resp = await prov.connect();
+    const pubkey = ((resp && resp.publicKey) ? resp.publicKey : prov.publicKey).toString();
+    const nonce = Math.random().toString(36).slice(2, 10);
+    const msg = `The Probability Battlefield — enlist\nWallet: ${pubkey}\nDevnet · no funds move · nonce ${nonce}`;
+    await prov.signMessage(new TextEncoder().encode(msg), 'utf8');
+    return pubkey;
+  }
+  function newGuestId() { const bytes = Array.from({ length: 32 }, () => (Math.random() * 256) | 0); return base58(bytes); }
   const RANKS = [[400, 'GENERAL'], [150, 'CAPTAIN'], [50, 'SERGEANT'], [1, 'SOLDIER']];
   function rankFor(pts) { for (const [th, r] of RANKS) if (pts >= th) return r; return 'RECRUIT'; }
 
@@ -507,21 +518,12 @@
     const [err, setErr] = useState(null);
     const phantom = getPhantom();
     const connectPhantom = async () => {
-      const prov = getPhantom(); if (!prov) return;
       setBusy(true); setErr(null);
-      try {
-        const resp = await prov.connect();
-        const pubkey = ((resp && resp.publicKey) ? resp.publicKey : prov.publicKey).toString();
-        // sign-in-with-Solana: the wallet signs a challenge (no funds, no gas).
-        const nonce = Math.random().toString(36).slice(2, 10);
-        const msg = `The Probability Battlefield — enlist\nWallet: ${pubkey}\nDevnet · no funds move · nonce ${nonce}`;
-        await prov.signMessage(new TextEncoder().encode(msg), 'utf8');
-        onConnect(pubkey, 'phantom');
-      } catch (e) {
-        setErr((e && (e.code === 4001 || /reject|declin/i.test(e.message || ''))) ? 'Enlistment declined' : 'Could not connect Phantom');
-      } finally { setBusy(false); }
+      try { onConnect(await phantomSignIn(), 'phantom'); }
+      catch (e) { setErr((e && (e.code === 4001 || /reject|declin/i.test(e.message || ''))) ? 'Enlistment declined' : 'Could not connect Phantom'); }
+      finally { setBusy(false); }
     };
-    const guest = () => { const bytes = Array.from({ length: 32 }, () => (Math.random() * 256) | 0); onConnect(base58(bytes), 'guest'); };
+    const guest = () => onConnect(newGuestId(), 'guest');
 
     const Card = ({ children }) => <div style={{ width: '100%', boxSizing: 'border-box', padding: '13px 14px', border: `1px solid ${LINE}`, borderRadius: 12, background: 'rgba(255,255,255,.03)', textAlign: 'center' }}>{children}</div>;
     const Record = () => (
@@ -586,15 +588,21 @@
     let s = ''; while (n > 0n) { s = A[Number(n % 58n)] + s; n = n / 58n; } return s || '1';
   }
 
-  // ── predict-along ─────────────────────────────────────────────────────────
-  // During a danger spell a war-drum prompt asks goal / corner / nothing; the pick
-  // is log-scored against the market's implied probability for that outcome.
-  function PredictAlong({ wallet }) {
-    const [prompt, setPrompt] = useState(null);     // {side, outcome, marketProb, id}
-    const [result, setResult] = useState(null);     // {label, pts, total, correct}
+  // ── predict-along (compact corner war-drum) ────────────────────────────────
+  // A danger spell fires a RAID prompt: call goal / corner / nothing. Log-scored vs
+  // the market's implied chance; consecutive correct calls build a streak multiplier.
+  // Compact + corner-anchored so it never covers the centre of the diorama; a visible
+  // countdown auto-dismisses it (no penalty) if you don't answer.
+  const RAID_SECS = 11;
+  function PredictAlong({ wallet, side }) {
+    const [prompt, setPrompt] = useState(null);   // { threatSide, outcome, marketProb }
+    const [result, setResult] = useState(null);    // { correct, outcome, pts, total, streak, mult }
+    const [count, setCount] = useState(0);
     const cool = useRef(0); const promptRef = useRef(null); const frameRef = useRef(null);
-    const board = useRef(loadBoard());
+    const board = useRef(loadBoard()); const timer = useRef(null); const tick = useRef(null);
 
+    const clear = () => { clearInterval(tick.current); clearTimeout(timer.current); };
+    const dismiss = () => { promptRef.current = null; setPrompt(null); clear(); };
     useEffect(() => { if (B().subscribe) return B().subscribe((s) => { frameRef.current = s.frame; }); }, []);
     useEffect(() => {
       if (!B().onEvent) return;
@@ -602,50 +610,126 @@
         if (e.kind !== 'predict_prompt') return;
         if (promptRef.current || Date.now() < cool.current) return;
         const mp = e.momentum ? a2pMom(e.momentum[e.side]) : (frameRef.current ? a2p(frameRef.current, e.side) : 0.3);
-        const p = { side: e.side, outcome: e.outcome, marketProb: mp, id: Date.now() };
-        promptRef.current = p; setPrompt(p);
+        const p = { threatSide: e.side, outcome: e.outcome, marketProb: mp };
+        promptRef.current = p; setPrompt(p); setCount(RAID_SECS);
         cool.current = Date.now() + 16000;
+        clear();
+        tick.current = setInterval(() => setCount((c) => Math.max(0, c - 1)), 1000);
+        timer.current = setTimeout(dismiss, RAID_SECS * 1000);
       });
     }, []);
+    useEffect(() => () => clear(), []);
 
     const answer = (choice) => {
-      const p = promptRef.current; promptRef.current = null; setPrompt(null);
+      const p = promptRef.current; dismiss();
       if (!p) return;
       const outcome = p.outcome, correct = choice === outcome;
-      // log-score vs the implied goal chance (a momentum read) — a correct call the
-      // model rated unlikely is worth more (Beat-the-Market-style scoring).
       const pMarket = outcome === 'goal' ? p.marketProb : outcome === 'corner' ? 0.15 : (1 - p.marketProb);
-      const gain = correct ? Math.max(4, Math.round(-Math.log2(Math.max(0.03, pMarket)) * 10)) : -8;
+      const base = correct ? Math.max(4, Math.round(-Math.log2(Math.max(0.03, pMarket)) * 10)) : -8;
+      const prev = loadRecord();
+      const streak = correct ? (prev.streak || 0) + 1 : 0;
+      const mult = correct ? streakMult(streak) : 1;
+      const gain = correct ? Math.round(base * mult) : -8;
       board.current = addScore(board.current, wallet, gain);
-      bumpRecord(correct, gain);
+      bumpRecord(correct, gain, streak);
       const total = board.current[wallet ? wallet.slice(0, 6) : 'you'] || 0;
-      setResult({ label: correct ? `RIGHT — ${outcome.toUpperCase()}` : `WRONG — it was ${outcome.toUpperCase()}`, pts: gain, total, correct });
-      setTimeout(() => setResult(null), 4600);
+      setResult({ correct, outcome, pts: gain, total, streak, mult });
+      setTimeout(() => setResult(null), 4200);
     };
 
     if (!prompt && !result) return null;
+    const id = (B().getIdent && B().getIdent()) || {};
+    const yours = side && prompt && prompt.threatSide === side;
+    const threatName = prompt ? (prompt.threatSide === 'home' ? (id.homeAbbr || 'HOME') : (id.awayAbbr || 'AWAY')) : '';
     return (
-      <div style={{ position: 'fixed', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom) + 128px)', zIndex: 47, pointerEvents: 'auto', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ position: 'fixed', right: 10, bottom: 'calc(env(safe-area-inset-bottom) + 150px)', zIndex: 47, pointerEvents: 'auto', width: 206 }}>
         {prompt && (
-          <div style={{ width: 'min(420px,100%)', background: 'rgba(20,10,8,.94)', border: '1px solid rgba(211,171,72,.5)', borderRadius: 14, padding: '12px 14px', WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', boxShadow: '0 10px 40px rgba(0,0,0,.55)', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1) both' }}>
-            <div style={{ fontFamily: COND, fontSize: 17, fontWeight: 700, letterSpacing: 2, color: GOLD }}>⚔ RAID INCOMING</div>
-            <div style={{ fontSize: 10, color: DIM, margin: '2px 0 10px' }}>Momentum read implies <b style={{ color: INK }}>{Math.round(prompt.marketProb * 100)}%</b> goal chance this spell. Call it:</div>
-            <div style={{ display: 'flex', gap: 7 }}>
-              {[['goal', 'GOAL'], ['corner', 'CORNER'], ['nothing', 'NOTHING']].map(([k, l]) => (
-                <button key={k} onClick={() => answer(k)} style={{ flex: 1, padding: '11px 4px', fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: 1, borderRadius: 9, cursor: 'pointer', color: INK, border: '1px solid rgba(211,171,72,.35)', background: 'rgba(211,171,72,.1)' }}>{l}</button>
+          <div style={{ background: 'rgba(20,12,6,.95)', border: '1px solid rgba(211,171,72,.5)', borderRadius: 13, padding: '10px 11px', WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', boxShadow: '0 10px 34px rgba(0,0,0,.55)', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1) both' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2M9.5 6.5L21 18v3h-3L6.5 9.5" /></svg>
+              <span style={{ flex: 1, fontFamily: COND, fontSize: 14, fontWeight: 700, letterSpacing: 1.5, color: GOLD }}>RAID{yours ? ' · YOURS' : ''}</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: count <= 3 ? '#e88a8a' : DIM }}>{count}s</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 8 }}>
+              <span style={{ fontFamily: COND, fontSize: 25, fontWeight: 700, color: INK, lineHeight: 1 }}>{Math.round(prompt.marketProb * 100)}%</span>
+              <span style={{ fontSize: 8, color: DIM, letterSpacing: 1, lineHeight: 1.2 }}>MARKET GOAL<br />CHANCE · {threatName}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 5 }}>
+              {[['goal', 'GOAL'], ['corner', 'COR'], ['nothing', 'NONE']].map(([k, l]) => (
+                <button key={k} onClick={() => answer(k)} style={{ flex: 1, padding: '9px 2px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: .5, borderRadius: 8, cursor: 'pointer', color: INK, border: '1px solid rgba(211,171,72,.35)', background: 'rgba(211,171,72,.12)' }}>{l}</button>
               ))}
             </div>
+            <div style={{ height: 3, marginTop: 8, borderRadius: 2, background: 'rgba(255,255,255,.08)', overflow: 'hidden' }}><div style={{ height: '100%', width: `${(count / RAID_SECS) * 100}%`, background: GOLD, transition: 'width 1s linear' }} /></div>
           </div>
         )}
         {result && (
-          <div style={{ width: 'min(420px,100%)', background: result.correct ? 'rgba(10,30,14,.95)' : 'rgba(30,12,12,.95)', border: `1px solid ${result.correct ? 'rgba(126,217,146,.5)' : 'rgba(232,138,138,.5)'}`, borderRadius: 14, padding: '11px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'sheetUp .3s both' }}>
-            <div>
-              <div style={{ fontFamily: COND, fontSize: 16, fontWeight: 700, letterSpacing: 1, color: result.correct ? '#a8e8ba' : '#f0b0b0' }}>{result.label}</div>
-              <div style={{ fontSize: 9, color: DIM, letterSpacing: 1 }}>CAMPAIGN TOTAL {result.total} PTS</div>
+          <div style={{ background: result.correct ? 'rgba(10,30,14,.95)' : 'rgba(30,12,12,.95)', border: `1px solid ${result.correct ? 'rgba(126,217,146,.5)' : 'rgba(232,138,138,.5)'}`, borderRadius: 13, padding: '10px 12px', animation: 'sheetUp .3s both' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontFamily: COND, fontSize: 16, fontWeight: 700, letterSpacing: 1, color: result.correct ? '#a8e8ba' : '#f0b0b0' }}>{result.correct ? 'RIGHT' : 'WRONG'}</span>
+              <span style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: result.correct ? '#7ed992' : '#e88a8a' }}>{result.pts > 0 ? '+' : ''}{result.pts}</span>
             </div>
-            <span style={{ fontFamily: MONO, fontSize: 18, fontWeight: 700, color: result.correct ? '#7ed992' : '#e88a8a' }}>{result.pts > 0 ? '+' : ''}{result.pts}</span>
+            <div style={{ fontSize: 8.5, color: DIM, letterSpacing: .5, marginTop: 2 }}>it was {result.outcome.toUpperCase()} · {result.total} PTS</div>
+            {result.correct && result.streak >= 2 && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, padding: '2px 7px', borderRadius: 20, background: 'rgba(211,171,72,.16)', border: '1px solid rgba(211,171,72,.4)' }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill={GOLD}><path d="M12 2c1 3 4 4 4 8a4 4 0 01-8 0c0-1 .5-2 1-2.5C9 8 12 6 12 2z" /></svg>
+                <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: GOLD }}>STREAK ×{result.streak} · {result.mult.toFixed(2)}×</span>
+              </div>
+            )}
           </div>
         )}
+      </div>
+    );
+  }
+
+  // ── campaign HUD chip (points + streak + your side) ────────────────────────
+  function CampaignHUD({ side, onPickSide }) {
+    const snap = useSnap();
+    const [rec, setRec] = useState(loadRecord);
+    useEffect(() => { const on = (e) => setRec(e.detail || loadRecord()); window.addEventListener('bf-record', on); return () => window.removeEventListener('bf-record', on); }, []);
+    if (snap.mode === 'sandbox' || snap.mode === 'synthetic') return null;
+    const id = snap.ident || {};
+    const sideName = side === 'home' ? (id.homeAbbr || 'HOME') : side === 'away' ? (id.awayAbbr || 'AWAY') : null;
+    return (
+      <div style={{ position: 'fixed', left: 10, top: 'calc(env(safe-area-inset-top) + 52px)', zIndex: 43, pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderRadius: 9, border: `1px solid ${LINE}`, background: PANEL, WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinejoin="round"><path d="M12 2l3 6 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 9l6-1z" /></svg>
+          <span style={{ fontFamily: COND, fontSize: 18, fontWeight: 700, color: '#f0f3ec', lineHeight: 1 }}>{rec.pts}</span>
+          <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1.5, color: DIM }}>PTS</span>
+          {rec.streak >= 2 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 1 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill={GOLD}><path d="M12 2c1 3 4 4 4 8a4 4 0 01-8 0c0-1 .5-2 1-2.5C9 8 12 6 12 2z" /></svg>
+              <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: GOLD }}>{rec.streak}</span>
+            </span>
+          )}
+        </div>
+        <button onClick={onPickSide} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${LINE}`, background: PANEL, cursor: 'pointer', WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
+          <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1, color: DIM }}>FIGHTING FOR</span>
+          {sideName ? <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: side === 'home' ? '#e88a8a' : '#7ab5e8' }}>{sideName}</span> : <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: GOLD }}>PICK ›</span>}
+        </button>
+      </div>
+    );
+  }
+
+  // ── pick a side ────────────────────────────────────────────────────────────
+  function SidePick({ onPick, onClose }) {
+    const snap = useSnap();
+    const id = snap.ident || {};
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 82, display: 'grid', placeItems: 'center' }}>
+        <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(3,5,3,.62)', animation: 'fadeIn .2s both' }} />
+        <div style={{ position: 'relative', width: 'min(360px, 90vw)', background: PANEL, border: `1px solid ${LINE}`, borderRadius: 16, padding: '18px 16px', textAlign: 'center', animation: 'sheetUp .28s cubic-bezier(.2,.9,.3,1) both', WebkitBackdropFilter: 'blur(16px)', backdropFilter: 'blur(16px)' }}>
+          <div style={{ fontFamily: COND, fontSize: 21, fontWeight: 700, letterSpacing: 2, color: '#f0f3ec' }}>WHOSE SIDE?</div>
+          <div style={{ fontSize: 10, color: DIM, margin: '4px 0 16px' }}>Pick the army you fight for.</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[['home', id.homeNation, id.homeAbbr, '#d3273e'], ['away', id.awayNation, id.awayAbbr, '#7ab5e8']].map(([s, nation, abbr, col]) => (
+              <button key={s} onClick={() => onPick(s)} style={{ flex: 1, padding: '14px 8px', borderRadius: 12, border: `1px solid ${col}66`, background: `${col}18`, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9 }}>
+                <Flag name={nation || (s === 'home' ? 'England' : 'Argentina')} w={42} />
+                <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: INK }}>{abbr || (s === 'home' ? 'HOME' : 'AWAY')}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={onClose} style={{ marginTop: 14, background: 'none', border: 'none', color: DIM, fontFamily: MONO, fontSize: 9, letterSpacing: 1, cursor: 'pointer', textDecoration: 'underline' }}>just watching</button>
+        </div>
       </div>
     );
   }
@@ -654,8 +738,18 @@
   function a2pMom(m) { return Math.min(0.6, Math.max(0.12, 0.12 + (m || 0.4) * 0.5)); }
   function loadBoard() { try { return JSON.parse(localStorage.getItem('bf_board') || '{}'); } catch { return {}; } }
   function addScore(board, wallet, pts) { const k = wallet ? wallet.slice(0, 6) : 'you'; board[k] = (board[k] || 0) + pts; try { localStorage.setItem('bf_board', JSON.stringify(board)); } catch {} return board; }
-  function loadRecord() { try { return JSON.parse(localStorage.getItem('bf_record') || '{"made":0,"correct":0,"pts":0}'); } catch { return { made: 0, correct: 0, pts: 0 }; } }
-  function bumpRecord(correct, pts) { const r = loadRecord(); r.made++; if (correct) r.correct++; r.pts += pts; try { localStorage.setItem('bf_record', JSON.stringify(r)); } catch {} return r; }
+  function loadRecord() { try { const r = JSON.parse(localStorage.getItem('bf_record') || '{}'); return { made: r.made || 0, correct: r.correct || 0, pts: r.pts || 0, streak: r.streak || 0, best: r.best || 0 }; } catch { return { made: 0, correct: 0, pts: 0, streak: 0, best: 0 }; } }
+  function bumpRecord(correct, pts, streak) {
+    const r = loadRecord(); r.made++; if (correct) r.correct++; r.pts += pts; r.streak = streak; r.best = Math.max(r.best, streak);
+    try { localStorage.setItem('bf_record', JSON.stringify(r)); } catch {}
+    try { window.dispatchEvent(new CustomEvent('bf-record', { detail: r })); } catch {}
+    return r;
+  }
+  // multiplier grows with the streak, modestly, capped at 2x
+  function streakMult(streak) { return 1 + Math.min(Math.max(0, streak - 1), 4) * 0.25; }
+  // which side you fight for (persists across fixtures; home|away)
+  function loadSide() { try { return localStorage.getItem('bf_side') || null; } catch { return null; } }
+  function saveSide(s) { try { s ? localStorage.setItem('bf_side', s) : localStorage.removeItem('bf_side'); } catch {} try { window.dispatchEvent(new CustomEvent('bf-side', { detail: s })); } catch {} }
 
   // which threat flare (if any) is lit on the diorama right now
   function flareOf(threat) {
@@ -731,6 +825,68 @@
     );
   }
 
+  // ── home / landing ─────────────────────────────────────────────────────────
+  function Home({ wallet, walletKind, onConnect, onEnter }) {
+    const phantom = getPhantom();
+    const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
+    const connect = async () => {
+      setBusy(true); setErr(null);
+      try { onConnect(await phantomSignIn(), 'phantom'); }
+      catch (e) { setErr(e && e.message === 'no-phantom' ? null : 'Enlistment declined'); }
+      finally { setBusy(false); }
+    };
+    const primary = { width: 'min(320px,90vw)', boxSizing: 'border-box', padding: 13, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#fff', background: 'linear-gradient(90deg,#7d4fe0,#9b7de8)', border: 'none', borderRadius: 11, cursor: 'pointer' };
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'radial-gradient(120% 85% at 50% 0%, #0d150f, #070b08 62%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', animation: 'fadeIn .4s both' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 8.5, letterSpacing: 2.5, color: GOLD, marginBottom: 16, border: '1px solid rgba(211,171,72,.35)', borderRadius: 20, padding: '4px 11px' }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: GOLD }} />DEVNET · LIVE TxLINE MARKET DATA
+        </div>
+        <div style={{ fontFamily: COND, fontSize: 'min(13.5vw,56px)', fontWeight: 700, letterSpacing: 3, color: '#f6f8f1', lineHeight: .96, textTransform: 'uppercase' }}>The Probability<br />Battlefield</div>
+        <div style={{ fontSize: 12, color: DIM, margin: '15px 0 30px', maxWidth: 330, lineHeight: 1.5 }}>Every World Cup match as a live war between two armies — driven by the de-margined market, provable on Solana.</div>
+        {wallet ? (
+          <div style={{ fontFamily: MONO, fontSize: 10, color: '#7ed992', marginBottom: 18, letterSpacing: 1 }}>{walletKind === 'phantom' ? 'PHANTOM · SIGNED IN' : 'GUEST'} · {wallet.slice(0, 4)}…{wallet.slice(-4)}</div>
+        ) : (
+          <div style={{ width: 'min(320px,90vw)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, marginBottom: 18 }}>
+            {phantom
+              ? <button onClick={connect} disabled={busy} style={primary}>{busy ? 'CHECK PHANTOM…' : 'CONNECT PHANTOM'}</button>
+              : <a href="https://phantom.app/download" target="_blank" rel="noopener" style={{ width: '100%', textDecoration: 'none' }}><button style={primary}>GET PHANTOM</button></a>}
+            <button onClick={() => onConnect(newGuestId(), 'guest')} style={{ background: 'none', border: 'none', color: DIM, fontFamily: MONO, fontSize: 10, letterSpacing: 1, cursor: 'pointer', textDecoration: 'underline' }}>continue as guest</button>
+            {err && <div style={{ fontSize: 10, color: '#e88a8a' }}>{err}</div>}
+          </div>
+        )}
+        <button onClick={onEnter} style={{ width: 'min(320px,90vw)', boxSizing: 'border-box', padding: 15, fontFamily: MONO, fontSize: 13, fontWeight: 700, letterSpacing: 2, color: '#0d0b05', background: GOLD, border: 'none', borderRadius: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>CHOOSE YOUR BATTLE →</button>
+      </div>
+    );
+  }
+
+  // ── first-time micro-onboarding (3 tips, skippable, seen once) ─────────────
+  const TIPS = [
+    ['ORBIT', 'Drag the battlefield to rotate the camera around the pitch.'],
+    ['PREDICT', 'When the war-drum sounds, call the raid — beat the market for points & streaks.'],
+    ['VERIFY', 'Tap the front, a flare, or VERIFY — every tick is provable on Solana.'],
+  ];
+  function OnboardingTips({ onDone }) {
+    const [i, setI] = useState(0);
+    const done = () => { try { localStorage.setItem('bf_onboarded', '1'); } catch {} onDone(); };
+    const next = () => { if (i >= TIPS.length - 1) done(); else setI(i + 1); };
+    const [tag, body] = TIPS[i];
+    return (
+      <div style={{ position: 'fixed', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom) + 200px)', zIndex: 48, display: 'flex', justifyContent: 'center', pointerEvents: 'auto' }}>
+        <div style={{ width: 'min(360px,100%)', background: 'rgba(9,13,10,.97)', border: `1px solid ${LINE}`, borderRadius: 13, padding: '12px 14px', WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', animation: 'sheetUp .3s both', boxShadow: '0 10px 34px rgba(0,0,0,.5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+            <span style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: 1.5, color: GOLD }}>{i + 1}/{TIPS.length}</span>
+            <span style={{ fontFamily: COND, fontSize: 15, fontWeight: 700, letterSpacing: 1.5, color: '#f0f3ec' }}>{tag}</span>
+          </div>
+          <div style={{ fontSize: 11, color: DIM, lineHeight: 1.45, marginBottom: 10 }}>{body}</div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={done} style={{ background: 'none', border: 'none', color: DIM, fontFamily: MONO, fontSize: 9.5, letterSpacing: 1, cursor: 'pointer' }}>SKIP</button>
+            <button onClick={next} style={{ padding: '6px 14px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: 1, color: '#0d0b05', background: GOLD, border: 'none', borderRadius: 8, cursor: 'pointer' }}>{i >= TIPS.length - 1 ? 'GOT IT' : 'NEXT'}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── root ──────────────────────────────────────────────────────────────────
   function BattleConsole() {
     const [ready, setReady] = useState(!!window.BATTLE);
@@ -739,6 +895,18 @@
     const [wallet, setWallet] = useState(() => { try { return localStorage.getItem('bf_wallet') || null; } catch { return null; } });
     const [walletKind, setWalletKind] = useState(() => { try { return localStorage.getItem('bf_wallet_kind') || 'guest'; } catch { return 'guest'; } });
     const [mode, setMode] = useState('replay');
+    const [side, setSide] = useState(loadSide);
+    const [showSidePick, setShowSidePick] = useState(false);
+    const pickSide = (s) => { saveSide(s); setSide(s); setShowSidePick(false); try { localStorage.setItem('bf_side_prompted', '1'); } catch {} };
+    // home/lobby: deep-links (?fixture=) bypass home; cold visit → hero; returning → lobby
+    const hasFixtureParam = (() => { try { return new URLSearchParams(location.search).has('fixture'); } catch { return false; } })();
+    const [home, setHome] = useState(() => {
+      if (hasFixtureParam) { try { localStorage.setItem('bf_entered', '1'); } catch {} return null; }
+      let entered = false; try { entered = !!localStorage.getItem('bf_entered'); } catch {}
+      return entered ? 'lobby' : 'hero';
+    });
+    const [showTips, setShowTips] = useState(false);
+    const enter = () => { try { localStorage.setItem('bf_entered', '1'); } catch {} setHome(null); setSheet('picker'); };
     const openInspect = useCallback((subject) => { setInspectSubject(subject); setSheet('inspect'); B().setPaused && B().setPaused(true); }, []);
     useEffect(() => {
       if (!ready || !B().onEvent) return;
@@ -755,10 +923,27 @@
       return B().subscribe((s) => { if (s.mode && s.mode !== mode) setMode(s.mode); });
     }, [ready, mode]);
     useEffect(() => {
-      const onKey = (e) => { if (e.key === 'Escape') setSheet(null); };
+      const onKey = (e) => { if (e.key === 'Escape') { setSheet(null); setShowSidePick(false); } };
       window.addEventListener('keydown', onKey);
       return () => window.removeEventListener('keydown', onKey);
     }, []);
+    // returning visit with an identity → straight to the lobby (the picker)
+    useEffect(() => { if (ready && home === 'lobby') { setSheet('picker'); setHome(null); } }, [ready, home]);
+    // pick-a-side once, on the first real-fixture entry with no side chosen (after home)
+    useEffect(() => {
+      if (!ready || home) return;
+      const real = mode !== 'sandbox' && mode !== 'synthetic';
+      let prompted = false; try { prompted = !!localStorage.getItem('bf_side_prompted'); } catch {}
+      if (real && !side && !prompted) { const t = setTimeout(() => setShowSidePick(true), 1400); return () => clearTimeout(t); }
+    }, [ready, home, mode, side]);
+    // 3-tip micro-onboarding once, after home + side are out of the way
+    useEffect(() => {
+      if (!ready || home || sheet || showSidePick) return;
+      let onboarded = false, prompted = false;
+      try { onboarded = !!localStorage.getItem('bf_onboarded'); prompted = !!localStorage.getItem('bf_side_prompted'); } catch {}
+      const real = mode !== 'sandbox' && mode !== 'synthetic';
+      if (real && !onboarded && prompted) { const t = setTimeout(() => setShowTips(true), 900); return () => clearTimeout(t); }
+    }, [ready, home, mode, sheet, showSidePick]);
     if (!ready) return null;
     const connect = (w, kind = 'guest') => {
       setWallet(w); setWalletKind(kind);
@@ -770,13 +955,17 @@
     return (
       <React.Fragment>
         <TopChrome onOpen={openSheet} mode={mode} wallet={wallet} />
+        <CampaignHUD side={side} onPickSide={() => setShowSidePick(true)} />
         <Scrubber />
         <InspectHotspots onInspect={openInspect} mode={mode} />
-        <PredictAlong wallet={wallet} />
+        <PredictAlong wallet={wallet} side={side} />
+        {showTips && !sheet && !showSidePick && <OnboardingTips onDone={() => setShowTips(false)} />}
+        {showSidePick && <SidePick onPick={pickSide} onClose={() => { setShowSidePick(false); try { localStorage.setItem('bf_side_prompted', '1'); } catch {} }} />}
         {sheet === 'picker' && <FixturePicker onClose={() => setSheet(null)} />}
         {sheet === 'inspect' && <InspectSheet subject={inspectSubject} onClose={() => setSheet(null)} />}
         {sheet === 'share' && <ShareSheet onClose={() => setSheet(null)} />}
         {sheet === 'wallet' && <WalletSheet onClose={() => setSheet(null)} onConnect={connect} wallet={wallet} walletKind={walletKind} />}
+        {home === 'hero' && <Home wallet={wallet} walletKind={walletKind} onConnect={connect} onEnter={enter} />}
       </React.Fragment>
     );
   }
