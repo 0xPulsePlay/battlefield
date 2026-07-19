@@ -8,6 +8,13 @@
   const PANEL = 'rgba(9,13,10,.94)', LINE = 'rgba(200,210,190,.16)';
   const MONO = "'IBM Plex Mono',ui-monospace,monospace", COND = "'Barlow Condensed',sans-serif";
   const B = () => window.BATTLE || {};
+  // diacritic-insensitive lower-case (so "cote" matches "Côte", "arg" matches Argentina)
+  const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  // a fixture's searchable haystack: both team names, their abbreviations, competition
+  function searchable(f) {
+    const ab = B().abbr || ((n) => String(n || '').slice(0, 3));
+    return norm(`${f.participant1} ${f.participant2} ${ab(f.participant1)} ${ab(f.participant2)} ${f.competition || ''}`);
+  }
 
   const fmtClock = (c) => {
     if (!c) return '—';
@@ -81,6 +88,8 @@
   function Scrubber() {
     const snap = useSnap();
     const [drag, setDrag] = useState(null);
+    const [isDesktop, setIsDesktop] = useState(() => typeof matchMedia !== 'undefined' && matchMedia('(min-width:1024px)').matches);
+    useEffect(() => { if (typeof matchMedia === 'undefined') return; const mq = matchMedia('(min-width:1024px)'); const on = () => setIsDesktop(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on); }, []);
     const wasPlaying = useRef(true);
     const prog = drag != null ? drag : (snap.progress || 0);
     const f = snap.frame;
@@ -88,11 +97,15 @@
     const seek = (p) => { B().seekProgress && B().seekProgress(p); };
     // no timeline to scrub in the synthetic sandbox (it's a live-feel playground)
     if (snap.mode === 'sandbox' || snap.mode === 'synthetic') return null;
+    // desktop: dock into the console chrome between the stats/feed columns (never over
+    // the diorama or the side panels). phone: floating bar above the corner controls.
+    const pos = isDesktop ? { left: 384, right: 404, bottom: 18 } : { left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom) + 70px)' };
+    const btn = { flex: '0 0 auto', width: 30, height: 30, borderRadius: 8, border: `1px solid ${LINE}`, background: 'rgba(255,255,255,.05)', color: INK, cursor: 'pointer', fontFamily: MONO };
     return (
-      <div style={{ position: 'fixed', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom) + 70px)', zIndex: 44, pointerEvents: 'auto' }}>
+      <div style={{ position: 'fixed', ...pos, zIndex: 44, pointerEvents: 'auto' }}>
         <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 12, padding: '8px 12px 9px', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={() => B().togglePlay && B().togglePlay()} style={{ flex: '0 0 auto', width: 30, height: 30, borderRadius: 8, border: `1px solid ${LINE}`, background: 'rgba(255,255,255,.05)', color: INK, cursor: 'pointer', fontFamily: MONO, fontSize: 12 }}>{snap.playing === false ? '▶' : '❚❚'}</button>
+            <button onClick={() => B().togglePlay && B().togglePlay()} style={{ ...btn, fontSize: 12 }}>{snap.playing === false ? '▶' : '❚❚'}</button>
             <span style={{ flex: '0 0 auto', fontFamily: MONO, fontSize: 12, fontWeight: 700, color: INK, minWidth: 52, fontVariantNumeric: 'tabular-nums' }}>{fmtClock(f && f.clock)}</span>
             <span style={{ flex: '0 0 auto', fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: DIM }}>{f && f.clock ? f.clock.phase : ''}</span>
             <input type="range" min="0" max="1000" value={Math.round(prog * 1000)} aria-label="Match timeline"
@@ -101,7 +114,8 @@
               onPointerUp={() => { setDrag(null); if (wasPlaying.current) B().setPaused && B().setPaused(false); }}
               style={{ flex: 1, accentColor: GOLD, height: 4, cursor: 'pointer' }} />
             <button onClick={() => { const nx = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; B().setSpeed && B().setSpeed(nx); }}
-              style={{ flex: '0 0 auto', minWidth: 34, height: 30, borderRadius: 8, border: `1px solid ${LINE}`, background: 'rgba(255,255,255,.05)', color: INK, cursor: 'pointer', fontFamily: MONO, fontSize: 11, fontWeight: 700 }}>{speed}×</button>
+              style={{ ...btn, minWidth: 34, width: 'auto', padding: '0 8px', fontSize: 11, fontWeight: 700 }}>{speed}×</button>
+            {isDesktop && <button onClick={() => B().toggleSound && B().toggleSound()} aria-label="Toggle sound" style={{ ...btn, width: 'auto', padding: '0 8px', fontSize: 8.5, fontWeight: 700, color: snap.sound ? GOLD : DIM }}>{snap.sound ? 'SND' : 'MUTE'}</button>}
           </div>
         </div>
       </div>
@@ -117,9 +131,17 @@
     useEffect(() => { B().fixtures && B().fixtures().then(setAll).catch(() => setAll([])); }, []);
     const counts = { live: 0, upcoming: 0, played: 0 };
     (all || []).forEach((f) => { counts[f.status] = (counts[f.status] || 0) + 1; });
+    // ordering: LIVE first, upcoming by kickoff (soonest), finished by recency (final on top)
+    const ORDER = {
+      live: (a, b) => (b.startTime || 0) - (a.startTime || 0),
+      upcoming: (a, b) => (a.startTime || 0) - (b.startTime || 0),
+      played: (a, b) => (b.startTime || 0) - (a.startTime || 0),
+    };
+    const nq = norm(q);
     const rows = (all || []).filter((f) => f.status === seg)
-      .filter((f) => !q || (f.participant1 + f.participant2 + (f.competition || '')).toLowerCase().includes(q.toLowerCase()))
-      .sort((a, b) => (b.oddsTickCount || 0) - (a.oddsTickCount || 0));
+      .filter((f) => !nq || searchable(f).includes(nq))
+      .sort(ORDER[seg] || ORDER.played);
+    const orderNote = seg === 'upcoming' ? 'SOONEST KICKOFF FIRST' : seg === 'live' ? 'LIVE NOW' : 'MOST RECENT FIRST';
     return (
       <Sheet title="CHOOSE YOUR BATTLE" onClose={onClose}>
         <button onClick={() => { B().open(0, 'sandbox'); onClose(); }}
@@ -164,7 +186,7 @@
               </div>
             </button>
           ))}
-          {rows.length > 0 && <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.35)', padding: '8px 4px 4px' }}>SORTED BY MARKET DEPTH · {rows.length} FIXTURES · TXLINE CORPUS</div>}
+          {rows.length > 0 && <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.35)', padding: '8px 4px 4px' }}>{orderNote} · {rows.length} FIXTURES · TXLINE CORPUS</div>}
         </div>
       </Sheet>
     );
@@ -666,8 +688,11 @@
     const id = (B().getIdent && B().getIdent()) || {};
     const yours = side && prompt && prompt.threatSide === side;
     const threatName = prompt ? (prompt.threatSide === 'home' ? (id.homeAbbr || 'HOME') : (id.awayAbbr || 'AWAY')) : '';
+    // desktop: right-middle, clearing the stats (bottom-left) + war-feed (bottom-right) columns.
+    const isDesktop = typeof matchMedia !== 'undefined' && matchMedia('(min-width:1024px)').matches;
+    const wrapPos = isDesktop ? { right: 20, top: '36%', width: 220 } : { right: 10, bottom: 'calc(env(safe-area-inset-bottom) + 150px)', width: 206 };
     return (
-      <div style={{ position: 'fixed', right: 10, bottom: 'calc(env(safe-area-inset-bottom) + 150px)', zIndex: 47, pointerEvents: 'auto', width: 206 }}>
+      <div style={{ position: 'fixed', ...wrapPos, zIndex: 47, pointerEvents: 'auto' }}>
         {prompt && (
           <div style={{ background: 'rgba(20,12,6,.95)', border: '1px solid rgba(211,171,72,.5)', borderRadius: 13, padding: '10px 11px', WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', boxShadow: '0 10px 34px rgba(0,0,0,.55)', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1) both' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>

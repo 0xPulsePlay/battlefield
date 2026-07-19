@@ -673,6 +673,14 @@ export class BattleEngine {
   draw() {
     const { ctx, W, H } = this;
     if (!W) return;
+    // flick-to-spin inertia: a released drag keeps orbiting, decaying with friction.
+    // Pivot is the pitch centre (u=0,v=0.5 maps to the rotation origin), so it stays put.
+    // Interrupted the moment a finger touches down (see _bindInput).
+    if (this._spinVel) {
+      this.cam.rot += this._spinVel;
+      this._spinVel *= 0.94;
+      if (Math.abs(this._spinVel) < 2e-4) this._spinVel = 0;
+    }
     this._shx = (Math.random() - 0.5) * this.shake; this._shy = (Math.random() - 0.5) * this.shake;
     this._cr = Math.cos(this.cam.rot); this._sr = Math.sin(this.cam.rot);
     this._applyTilt();
@@ -1409,11 +1417,13 @@ export class BattleEngine {
     let lastTap = 0, pinch0 = 0, zoom0 = 1;
     const down = e => {
       cv.setPointerCapture?.(e.pointerId);
+      this._spinVel = 0; // a touch interrupts any in-flight flick
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (ptrs.size === 1) {
         const now = performance.now();
         if (now - lastTap < 300) this.recenter();
         lastTap = now;
+        this._rotV = 0; this._lastMoveT = now;
       } else if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
         pinch0 = Math.hypot(a.x - b.x, a.y - b.y); zoom0 = this.cam.zoom;
@@ -1427,8 +1437,12 @@ export class BattleEngine {
         const panning = e.pointerType === 'mouse' && ((e.buttons & 2) || e.shiftKey || e.ctrlKey || e.metaKey);
         if (panning) { this.cam.x += dx; this.cam.y += dy; }
         else {
-          this.cam.rot += dx * 0.0055;
+          const drot = dx * 0.0055;
+          this.cam.rot += drot;
           this.cam.tilt = clamp(this.cam.tilt - dy * 0.0028, 0.15, 0.85);
+          // track angular velocity (rot per ms) for flick-to-spin on release
+          const now = performance.now(), dt = Math.max(1, now - (this._lastMoveT || now));
+          this._rotV = drot / dt; this._lastMoveT = now;
         }
       } else if (ptrs.size === 2) {
         // fingers moving together = pan (each event carries one finger's delta → half weight)
@@ -1438,7 +1452,15 @@ export class BattleEngine {
         if (pinch0 > 0) this.cam.zoom = clamp(zoom0 * d / pinch0, 0.42, 2.6);
       }
     };
-    const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
+    const up = e => {
+      ptrs.delete(e.pointerId); pinch0 = 0;
+      // release with recent angular velocity → inertial spin (a flick ≈ a half-orbit)
+      if (ptrs.size === 0 && performance.now() - (this._lastMoveT || 0) < 90) {
+        const v = (this._rotV || 0) * 15; // rot/ms → rot/frame (~16ms)
+        if (Math.abs(v) > 0.006) this._spinVel = clamp(v, -0.06, 0.06);
+      }
+      this._rotV = 0;
+    };
     const wheel = e => {
       e.preventDefault();
       if (e.altKey) { this.cam.rot += e.deltaY * 0.0022; return; } // alt+wheel rotates

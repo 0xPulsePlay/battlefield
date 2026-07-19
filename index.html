@@ -174,11 +174,7 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-ra
       </div>
     </div>
 
-    <div style="position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:25; display:flex; gap:8px;">
-      <button onClick="{{ onTogglePlay }}" style="width:52px; height:44px; font-family:'IBM Plex Mono',monospace; font-size:13px; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.8); color:#e2e7dc; border-radius:8px; cursor:pointer;">{{ playLabel }}</button>
-      <button onClick="{{ onCycleSpeed }}" style="width:52px; height:44px; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.8); color:#e2e7dc; border-radius:8px; cursor:pointer;">{{ speedLabel }}</button>
-      <button onClick="{{ onToggleSound }}" style="width:52px; height:44px; font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.8); color: {{ soundColor }}; border-radius:8px; cursor:pointer;">{{ soundLabel }}</button>
-    </div>
+    <!-- desktop transport lives in the docked console scrubber (see app/console.jsx) -->
   </sc-if>
 
   <!-- ====== BANNER / REPLAY OVERLAYS ====== -->
@@ -291,6 +287,8 @@ class Component extends DCLogic {
       setSpeed: (x) => { this.driver && this.driver.setSpeed(x); this.setState({ speed: x }); },
       setPaused: (b) => { this.driver && this.driver.setPaused(b); this.setState({ playing: !b }); },
       togglePlay: () => this._togglePlay(),
+      toggleSound: () => this.setState(st => ({ sound: !st.sound })),
+      getCam: () => this.engine ? { rot: this.engine.cam.rot, tilt: this.engine.cam.tilt, zoom: this.engine.cam.zoom, x: this.engine.cam.x, y: this.engine.cam.y, spin: this.engine._spinVel || 0 } : null,
       getModel: () => this.model,
       getIdent: () => this.ident,
       getFrame: () => this._lastF,
@@ -449,7 +447,7 @@ class Component extends DCLogic {
     // notify the consumer overlay (fixture picker / scrubber / predict-along)
     if (this._subs && this._subs.size) {
       const snap = { frame: f, ident: this.ident, progress: prog, playing: this.state.playing, speed: this.state.speed,
-        mode: this.state.replayMode, fixtureId: this.state.fixtureId, clockText: this._clockFmt(f.clock), threatText };
+        mode: this.state.replayMode, fixtureId: this.state.fixtureId, clockText: this._clockFmt(f.clock), threatText, sound: this.state.sound };
       for (const cb of this._subs) { try { cb(snap); } catch (e) {} }
     }
   }
