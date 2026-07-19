@@ -288,15 +288,13 @@ export class RealMatchDriver {
     this._lastOddsTs = 0;
     this.prob = { home: 33.3, draw: 33.4, away: 33.3 };
     const onEvt = (evt) => this._onLiveEvent(evt);
+    // Resumable SSE goes through the SDK's stream() (auto-reconnect, gap replay via
+    // Last-Event-ID). session.js always injects the client; guard so a missing one
+    // leaves the diorama idle rather than crashing it.
     if (this.client && typeof this.client.stream === 'function') {
       this._stopLive = this.client.stream({ fixtureId: this.fixtureId }, onEvt, { since: '0' });
     } else {
-      // raw EventSource fallback
-      const es = new EventSource(`${this.baseUrl}/v1/stream/fixtures/${this.fixtureId}?since=0`);
-      const wrap = (name) => (m) => { try { onEvt({ event: name, id: m.lastEventId, data: JSON.parse(m.data) }); } catch {} };
-      es.addEventListener('score', wrap('score'));
-      es.addEventListener('odds', wrap('odds'));
-      this._stopLive = () => es.close();
+      this._emit({ kind: 'live_unavailable' });
     }
   }
 
@@ -342,8 +340,8 @@ export class RealMatchDriver {
   }
 }
 
-// factory: load the model then construct the driver (async).
-export async function createReplayDriver({ onFrame, onEvent, baseUrl = 'http://localhost:3001', fixtureId, replayDurationSec, speed, startTs, client }) {
-  const model = await loadReplayModel(baseUrl, fixtureId);
+// factory: load the model (via the SDK client) then construct the driver (async).
+export async function createReplayDriver({ onFrame, onEvent, client, baseUrl = 'http://localhost:3001', fixtureId, replayDurationSec, speed, startTs }) {
+  const model = await loadReplayModel(client, fixtureId);
   return new RealMatchDriver({ onFrame, onEvent, model, mode: 'replay', baseUrl, fixtureId, replayDurationSec, speed, startTs, client });
 }

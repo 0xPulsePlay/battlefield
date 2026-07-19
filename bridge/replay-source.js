@@ -9,7 +9,7 @@
 // front/momentum/ambient-possession are derived (as in the synthetic driver).
 //
 // `buildReplayModel(fixtureResp, oddsResp)` is PURE so it is unit-tested against
-// recorded fixtures. `loadReplayModel(...)` fetches.
+// recorded fixtures. `loadReplayModel(client, id)` reads via `@txline/client-sdk`.
 
 import {
   orientProb, frontFromProb, actionToBattleEvent, clamp,
@@ -296,10 +296,12 @@ function probAtSamples(samples, ts) {
 const pick = (s) => ({ home: s.home, draw: s.draw, away: s.away });
 
 // ── async loader (browser/node) ───────────────────────────────────────────
-export async function loadReplayModel(baseUrl, fixtureId, fetchImpl = fetch) {
+// Takes a `@txline/client-sdk` TxlinePlatformClient — every /v1 read goes through
+// the SDK (no raw fetch here). `buildReplayModel` stays pure + hermetically tested.
+export async function loadReplayModel(client, fixtureId) {
   const [fx, od] = await Promise.all([
-    fetchImpl(`${baseUrl}/v1/fixtures/${fixtureId}`).then((r) => r.json()),
-    fetchImpl(`${baseUrl}/v1/fixtures/${fixtureId}/odds?market=1X2_PARTICIPANT_RESULT`).then((r) => r.json()),
+    client.fixture(fixtureId),
+    client.odds(fixtureId, { market: '1X2_PARTICIPANT_RESULT' }),
   ]);
   return buildReplayModel(fx, od);
 }

@@ -1,53 +1,84 @@
-# Battlefield — Build Status (nightshift/product)
+# Battlefield — Build Status
 
-Overnight productization: synthetic prototype → real TxLINE data + consumer layer.
 Engine: http://localhost:3001 (base txline-explorer). Dev server: **port 4400** (`--strictPort`).
-Prime directive: **renderer (engine.js) + BattleFrame/BattleEvent contract DO NOT CHANGE.**
-We swap the driver and add UI around the existing HUD.
+Rooms sidecar (C10): **port 4490**. Prime directive: **renderer (engine.js) + BattleFrame/BattleEvent
+contract DO NOT CHANGE.** We swap the driver and add UI around the existing HUD.
 
-## Acceptance criteria (authored up front — do not weaken)
+Run: `npm run dev` (→ :4400) · rooms: `npm run rooms` (→ :4490) · tests: `npm test` (`node --test bridge/`).
 
-### P0 — Real data bridge (has a written spec; cut-line #1)
-- [x] `bridge/mapping.js`: pure, hermetic mappers (statusId→phase, 1X2 Pct→prob, possession level→zone, action→BattleEvent, front/momentum derivation). Unit-tested against recorded fixtures. **(13/13 green)**
-- [x] `bridge/replay-source.js`: fetch fixture detail + 1X2 odds series; build a **ts-native, match-clock-derived** model (clock anchored on real event minutes + phase transitions, HT frozen, stoppage honoured); prob path with **suspension gaps at goals** (never interpolated). **(9/9 green)**
-- [x] `bridge/real-driver.js`: `RealMatchDriver` — same `{onFrame,onEvent}` + method surface as synthetic (inject/forceThreat/setFogForced/setMomentumOverride/jumpToFinale/setPaused/setSpeed/destroy) + seek/seekProgress. REPLAY (virtual match clock) + LIVE (SSE) paths. **(8/8 green + verified in browser)**
-- [x] Score always in sync with the clock; halftime is not a minute tick; stoppage/ET handled. **(browser-verified: ENG-ARG plays 1-0 → 1-1 → 1-2, clock frozen at HT, suspension at the equalizer)**
-- [x] HUD team identity **dynamic** (home/away abbr+name+palette+SVG flag from fixture via bridge/teams.js), not ENG/ARG literals.
-- [x] Synthetic driver still selectable (`?mode=synthetic`) as offline/demo fallback (+ auto-fallback if engine unreachable).
+---
 
-### P1 — Consumer layer (new scope; design as we go)
-- [x] Fixture picker over all corpus fixtures, segmented live/upcoming/finished, SVG country flags, search, sorted by market depth. **(browser-verified: 109 finished + 8 upcoming; fixture switch re-skins the diorama, e.g. BRA vs HAI)**
-- [x] Replay scrubber: seek within a match; cinematic continuous fast-forward (1×/2×/4×/8×); pause-on-drag, resume-on-release. **(verified)**
-- [x] Every-pixel-inspectable: VERIFY opens the tick payload (real state) → "verify this tick" → **real Merkle proof walk** (leaf → sub-tree → root → on-chain account) via `/v1/validation/scores`. **(verified: computed root === on-chain root, PROVEN AUTHENTIC)**
-- [x] Predict-along: danger-spell war-drum prompt (real pre-goal threat windows); answers log-scored vs market implied prob; per-match leaderboard (localStorage). **(verified: RAID INCOMING fires + scores)**
-- [x] Share: replay link (fixture + ts params) restores state; poster-frame PNG export (canvas snapshot). **(verified)**
-- [x] Wallet sign-in (devnet, clearly labelled DEVNET · NO REAL FUNDS; localStorage session). **(verified)**
+# FINAL ROUND — spec 05b-battlefield-final-round (2026-07-19)
 
-### Guardrails (owner "Do not" list)
-- [x] Sparkline honest across suspensions (never interpolate) — model holds prob + gaps at goals.
-- [x] No 100vh (100dvh used); no separate mobile-landscape layout; no real crests/FIFA marks (abstract SVG flags + army palettes).
-- [x] Audio off by default; cinematics never block the frame loop; renderer untouched.
-- [x] Label reality: DevNet badge on wallet, REPLAY/LIVE badge in the top bar, "no wallet, no gas" on the proof.
+Confirmed phase order (Mikail chose SDK-first):
+**B1→B2 (SDK) · B3–B6 (bugs) · B7 (compliance) · C1–C3 (inspect+wallet) · C4–C6 (game loop) ·
+C10 (rooms) · C7–C9 (layout/camera/picker) · C11 (overlay) · D1 (vendor).**
+Deadline TONIGHT 23:59 UTC; final kicks off 19:00 UTC. Commit at every green milestone; never leave
+main broken. Playwright-verify each phase phone-portrait (402×874) first.
 
-## Phase log
+## Acceptance criteria (from the spec AC lines — do not weaken)
+
+### P0 — Correctness & compliance
+| ID | Acceptance criterion | Status |
+|---|---|---|
+| B1 | `grep -rn "fetch(.*/v1"` (app code, excl node_modules/fixtures) → **zero** hits; all bridge tests green; full replay journey plays in Playwright | **PASS** — grep=0; 36/36 tests; Playwright: data.js loaded, /v1 fixture+odds+fixtures(117)+proof all via SDK, computed root===chain (b23f6841), playback advances, 0 console errors |
+| B2 | Browser-side `@txline/verify` walks the Merkle proof; browser-computed root matches on-chain; engine `verify=1` shown as independent 2nd check; zero console errors | PENDING |
+| B3 | Extra/stoppage time no longer always 0 — replay of a fixture with known stoppage shows non-zero added minutes at the right times; ET periods labeled correctly | PENDING |
+| B4a | Playback sync: at the ENG–ARG 54' goal, banner side/minute match the fixture event payload; prob boxes match the odds series at that ts; fog onset aligns with recorded suspension (±1 tick) | PENDING |
+| B4b | Seek sync: Playwright seeks to 3 timestamps (pre-goal, HT, late); engine frame state (front, score, clock, fog flag) matches the feed at each ts; no stale/replayed cinematics | PENDING |
+| B5 | Real fixture → no War Room button anywhere; SANDBOX battle (fictional teams, badged) → all War Room triggers visibly work | PENDING |
+| B6 | Poster PNG downloads with correct caption band on phone + desktop; copied deep-link restores fixture + timestamp | PENDING |
+| B7 | Compliance sweep vs HACKATHON-MUST-INCLUDES: C1 + C2 close Track-2 boxes; DevNet badging kept; NO TxL-token P2P; deploy runbook in BLOCKED.md (Mikail-only push/tunnel) | PENDING |
+
+### P1 — Product gaps
+| ID | Acceptance criterion | Status |
+|---|---|---|
+| C1 | Tap threat flare / fog / frontline each opens the inspect sheet with real payload data (Playwright taps all three during ENG–ARG replay) | PENDING |
+| C2 | Real Phantom (`window.phantom.solana`) connect + signMessage; graceful fallback w/ install link + continue-as-guest; record persists across reload keyed to pubkey; DevNet badge stays | PENDING |
+| C3 | Wallet sheet redesign: no wrapped-orphan/misaligned text at 360/402/430px; copy ≤ half current length; game-flavored, centered, icons over words | PENDING |
+| C4 | Game loop: pick-a-side; two correct calls in a row show streak=2 w/ multiplier; wrong call resets; running points total in HUD; state survives reload | PENDING |
+| C5 | Onboarding + home/lobby: cold visit → home; returning w/ identity → lobby; deep-links (`?fixture=`) bypass home; ≤3 skippable tooltips seen once | PENDING |
+| C6 | RAID prompt redesign: never occludes center of diorama; market implied % legible at a glance; countdown visible; auto-dismiss | PENDING |
+| C10 | Real-time rooms (ws sidecar :4490): two contexts join same code; a call in A appears on B's leaderboard <1s; late joiner gets full roster+scores; degrade to solo when server down | PENDING |
+| C7 | Desktop layout: no floating control overlaps diorama/side columns at 1280/1440/1920; scrubber docked in console chrome | PENDING |
+| C8 | Camera: orbit pivots pitch center (stays fixed on screen); double-tap recenter lands documented pose; flick spins + decays at 60fps | PENDING |
+| C9 | Picker ordering LIVE→upcoming(soonest)→finished(recent); search on name/abbr/country, diacritic-insensitive, instant ("arg" surfaces all Argentina; finished leads w/ most recent) | PENDING |
+| C11 | `?overlay=1` route: clean at 1920×1080, zero interactive chrome; `&bg=green|black` switches background | PENDING |
+
+### P2 — If clock allows
+| ID | Acceptance criterion | Status |
+|---|---|---|
+| D1 | Vendor CDN deps (React/Babel/fonts) into public/vendor/ with shim so venue Wi-Fi can't white-screen | PENDING |
+
+## Phase log (final round)
 | Phase | Status | Notes |
 |---|---|---|
-| Recon + engine probes | PASS | Engine live, 116 fixtures, all shapes confirmed, hermetic fixtures captured |
-| P0 mapping.js + tests | PASS | 13/13 hermetic tests green |
-| P0 replay-source.js + tests | PASS | 9/9; match-clock model verified against real ENG-ARG |
-| P0 real-driver.js | PASS | 8/8; REPLAY virtual clock + LIVE SSE; same method surface |
-| P0 HUD dynamic identity + factory | PASS | app/session.js swaps driver+engine+palette per fixture; browser-verified |
-| P0 teams.js palettes + SVG flags | PASS | 6/6; 32 hand-tuned palettes + 25 real flags + generated fallback |
-| P1 fixture picker | PASS | app/console.jsx; segmented + flags + search; verified |
-| P1 scrubber | PASS | seek + 1/2/4/8× fast-forward; verified |
-| P1 inspect + Merkle proof | PASS | real /v1/validation/scores proof walk; PROVEN AUTHENTIC verified |
-| P1 predict-along | PASS | pre-goal threat windows + log-score + local leaderboard; verified |
-| P1 share + poster | PASS | deep-link + canvas PNG export; verified |
-| P1 wallet sign-in | PASS | devnet-labelled localStorage session; verified |
-| Playwright verification | PASS | full phone-portrait journey (pick→replay→inspect→verify→predict→poster) + desktop console smoke; zero console errors; screenshots in docs/screenshots/ |
-| Corpus breadth | PASS | 23/23 sampled fixtures (highest/middle/lowest odds-depth) replay cleanly end-to-end: frames flow, fulltime fires, prob always sums to ~100, no throws — validates "all 116 replayable" |
-| Round-2 polish | PASS | composed poster frame · tappable War Feed → per-event Merkle proof · persistent predict record in wallet |
-| Live SSE mode | SMOKE | mode=live opens composite SSE, LIVE badge, frames flow, no crash (intended for Sun final) |
-| Production build (`vite build`) | KNOWN-LIMIT | DC runtime (support.js) + x-import .jsx are runtime-fetched, not bundled → run via `npm run dev`. See BLOCKED.md |
+| Recon (read all 5 docs + engine manual + full source) | DONE | SDK installed is v0.1.0 (vendored), exports `TxlinePlatformClient`+`TxlinePlatformError`; has fixture/odds/state/validateScores/fixtures/stream. B3 root cause: `additional_time` events carry `minute` (when announced) but no added-minutes amount → `+0 MIN`. |
+| B1 SDK unification (data) | PASS | New `app/data.js` = sole importer of `@txline/client-sdk` (DC runtime can't import npm directly, so HUD dynamic-imports it). replay-source `loadReplayModel(client,id)`, real-driver live SSE via `client.stream()`, session builds one client, HUD 4 helpers use `client.{fixtures,validateScores,state}`. `optimizeDeps.include` added. Restarted :4400. |
 
-_Run: `npm run dev` (→ :4400). Tests: `node --test bridge/`._
+---
+
+# Prior nightshift build — spec 05-battlefield (2026-07-16..18) [SHIPPED]
+
+Overnight productization: synthetic prototype → real TxLINE data + consumer layer.
+All P0 + P1 below verified in the prior run (see git history + STATUS-FOR-MIKAIL.md). Retained as the
+baseline the final round builds on.
+
+### P0 — Real data bridge
+- [x] `bridge/mapping.js`: pure hermetic mappers, unit-tested. **(13/13 green)**
+- [x] `bridge/replay-source.js`: ts-native match-clock model, prob path w/ suspension gaps. **(9/9 green)**
+- [x] `bridge/real-driver.js`: `RealMatchDriver` — same surface as synthetic + seek + LIVE SSE. **(8/8 green)**
+- [x] Score in sync w/ clock; HT frozen; stoppage/ET handled.
+- [x] HUD team identity dynamic from fixture (teams.js palettes + SVG flags).
+- [x] Synthetic driver still selectable (`?mode=synthetic`) as offline fallback.
+
+### P1 — Consumer layer
+- [x] Fixture picker (segmented live/upcoming/finished, flags, search).
+- [x] Replay scrubber: seek + cinematic 1×/2×/4×/8× fast-forward.
+- [x] Every-tick-inspectable → real Merkle proof walk via `/v1/validation/scores` (engine verify=1).
+- [x] Predict-along: danger-spell prompt, log-scored vs market prob, localStorage record.
+- [x] Share: replay deep-link + poster PNG export.
+- [x] Wallet sign-in (devnet guest identity, labelled).
+
+_36 hermetic bridge tests green (`node --test bridge/`). Prior run verified full phone-portrait
+journey in Playwright, zero console errors._

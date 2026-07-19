@@ -254,10 +254,11 @@ class Component extends DCLogic {
     this._mqD.addEventListener('change', this._onMq);
     this._mqL.addEventListener('change', this._onMq);
 
-    const [{ BattleEngine }, sessionMod, teamsMod] = await Promise.all([import('./engine.js'), import('./app/session.js'), import('./bridge/teams.js')]);
+    const [{ BattleEngine }, sessionMod, teamsMod, dataMod] = await Promise.all([import('./engine.js'), import('./app/session.js'), import('./bridge/teams.js'), import('./app/data.js')]);
     this._BattleEngine = BattleEngine;
     this._session = sessionMod;
     this._teams = teamsMod;
+    this._data = dataMod;
     const cv = this.canvasRef.current;
     this._resize = () => { const r = cv.getBoundingClientRect(); if (r.width && this.engine) this.engine.resize(r.width, r.height); };
     this._ro = new ResizeObserver(this._resize); this._ro.observe(cv);
@@ -265,6 +266,8 @@ class Component extends DCLogic {
     // read deep-link params: ?fixture=&mode=&t=&dur=
     const params = new URLSearchParams(location.search);
     this._baseUrl = params.get('api') || sessionMod.DEFAULT_BASE_URL;
+    // one @txline/client-sdk client for the whole HUD (data helpers + sessions).
+    this._client = dataMod.makeClient(this._baseUrl);
     this._replayDur = params.get('dur') ? +params.get('dur') : 210;
     const mode = params.get('mode') || 'replay';
     const fixtureId = +(params.get('fixture')) || sessionMod.DEFAULT_FIXTURE;
@@ -297,32 +300,17 @@ class Component extends DCLogic {
       baseUrl: () => this._baseUrl,
       subscribe: (cb) => { this._subs.add(cb); return () => this._subs.delete(cb); },
       onEvent: (cb) => { this._evSubs.add(cb); return () => this._evSubs.delete(cb); },
-      // data helpers (all same-origin via the /v1 proxy)
+      // data helpers — all through @txline/client-sdk (this._client), no raw fetch.
       fixtures: async () => {
         if (this._fixturesCache) return this._fixturesCache;
-        const r = await fetch(`${this._baseUrl}/v1/fixtures?status=all&limit=300`);
-        const j = await r.json();
+        const j = await this._client.fixtures({ status: 'all', limit: 300 });
         this._fixturesCache = j.fixtures || [];
         return this._fixturesCache;
       },
-      proof: async (seq, statKeys = [1, 2], verify = true) => {
-        const fx = this.state.fixtureId;
-        const r = await fetch(`${this._baseUrl}/v1/validation/scores?fixtureId=${fx}&seq=${seq}&statKeys=${statKeys.join(',')}&verify=${verify ? 1 : 0}`);
-        if (!r.ok) throw new Error(`proof ${r.status}`);
-        return r.json();
-      },
-      stateAtTs: async (ts) => {
-        const fx = this.state.fixtureId;
-        const r = await fetch(`${this._baseUrl}/v1/fixtures/${fx}/state?ts=${Math.round(ts)}`);
-        if (!r.ok) throw new Error(`state ${r.status}`);
-        return r.json();
-      },
-      stateAtSeq: async (seq) => {
-        const fx = this.state.fixtureId;
-        const r = await fetch(`${this._baseUrl}/v1/fixtures/${fx}/state?seq=${seq}`);
-        if (!r.ok) throw new Error(`state ${r.status}`);
-        return r.json();
-      },
+      proof: (seq, statKeys = [1, 2], verify = true) =>
+        this._client.validateScores(this.state.fixtureId, seq, statKeys, { verify }),
+      stateAtTs: (ts) => this._client.state(this.state.fixtureId, { ts: Math.round(ts) }),
+      stateAtSeq: (seq) => this._client.state(this.state.fixtureId, { seq }),
       // current wall-clock ts of the replay head (for proof/state lookups + share links)
       headTs: () => (this.driver && this.driver.ts) || (this.model ? this.model.firstTs : 0),
       flag: (name, opts) => this._teams ? this._teams.flagSvg(name, opts) : '',
@@ -347,7 +335,7 @@ class Component extends DCLogic {
     this.setState({ loading: true, loadError: null });
     let sess;
     try {
-      sess = await this._session.openSession({ mode, fixtureId, baseUrl: this._baseUrl, replayDurationSec: this._replayDur, startTs });
+      sess = await this._session.openSession({ mode, fixtureId, baseUrl: this._baseUrl, client: this._client, replayDurationSec: this._replayDur, startTs });
     } catch (e) {
       this.setState({ loading: false, loadError: String((e && e.message) || e) });
       if (mode !== 'synthetic') { this._row('DATA ENGINE UNREACHABLE · falling back to synthetic', 'gold'); return this._openFixture({ fixtureId, mode: 'synthetic' }); }

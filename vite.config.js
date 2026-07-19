@@ -6,6 +6,9 @@ import { defineConfig } from 'vite';
 const ENGINE = process.env.ENGINE_URL || 'http://localhost:3001';
 
 export default defineConfig({
+  // Pre-bundle the data SDK at startup so the first dynamic import of app/data.js
+  // doesn't trigger a mid-demo re-optimize + full reload.
+  optimizeDeps: { include: ['@txline/client-sdk'] },
   server: {
     host: true,
     port: 4400,

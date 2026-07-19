@@ -8,6 +8,7 @@ import { RealMatchDriver } from '../bridge/real-driver.js';
 import { loadReplayModel } from '../bridge/replay-source.js';
 import { engineTeam, flagSvg } from '../bridge/teams.js';
 import { MatchDriver } from '../driver.js';
+import { makeClient } from './data.js';
 
 // same-origin by default: Vite proxies /v1 → the engine (see vite.config.js),
 // so fetches are '/v1/...' with no CORS. Override with ?api= for a raw origin.
@@ -36,7 +37,7 @@ const SYN_TEAMS = {
 // Loads everything for a fixture and returns a `createDriver(onFrame,onEvent)`
 // thunk so the caller can build the engine FIRST, then start the driver — no
 // frame lands on a half-swapped engine during a fixture switch.
-export async function openSession({ mode = 'replay', fixtureId = DEFAULT_FIXTURE, baseUrl = DEFAULT_BASE_URL, replayDurationSec, startTs }) {
+export async function openSession({ mode = 'replay', fixtureId = DEFAULT_FIXTURE, baseUrl = DEFAULT_BASE_URL, client, replayDurationSec, startTs }) {
   if (mode === 'synthetic') {
     return {
       model: null,
@@ -48,7 +49,9 @@ export async function openSession({ mode = 'replay', fixtureId = DEFAULT_FIXTURE
     };
   }
 
-  const model = await loadReplayModel(baseUrl, fixtureId);
+  // one SDK client for this session: model load + the live SSE stream both use it.
+  const dataClient = client || makeClient(baseUrl);
+  const model = await loadReplayModel(dataClient, fixtureId);
   const teams = model.teams;
   return {
     model,
@@ -60,6 +63,6 @@ export async function openSession({ mode = 'replay', fixtureId = DEFAULT_FIXTURE
       finalScore: model.finalScore, winner: model.winner, competition: model.competition,
     },
     createDriver: (onFrame, onEvent) =>
-      new RealMatchDriver({ onFrame, onEvent, model, mode, baseUrl, fixtureId, replayDurationSec, startTs }),
+      new RealMatchDriver({ onFrame, onEvent, model, mode, baseUrl, fixtureId, replayDurationSec, startTs, client: dataClient }),
   };
 }
