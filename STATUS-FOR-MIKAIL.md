@@ -1,5 +1,15 @@
 # Battlefield — Final-Round handoff (2026-07-19)
 
+## Round 3 (§H) — the last two layout nits, done
+
+- **H1 — FRONTLINE ODDS tab:** now sits directly above the scrub bar, left edge aligned with it
+  (mobile and desktop) instead of floating mid-left.
+- **H2 — points + "for ENG":** now one equal-height row (side by side, not stacked). To keep it clear
+  of FEED/STATS at 360px the chips compact (icons instead of the "PTS"/"FOR" words) and the sound
+  toggle moved into the scrub bar as a small speaker/mute icon.
+- Verified at 360/402/430 + 1440 — no overlaps, nav + scrub bar fit, full cold journey zero console
+  errors. Round-3 HEAD `4a1259c`; `npm test` 44/44.
+
 ## Round 2 (§G) — your post-review polish, done
 
 After your hands-on review ("really cool … but mobile is jumbled and gobbled"), I did the §G pass:
