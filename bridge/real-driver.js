@@ -117,6 +117,11 @@ export class RealMatchDriver {
     this.mom = { home: 0.32, away: 0.3 };
     this.prob = this.model ? this._sanitizeProb(this.model.probAt(this.ts)) : { home: 33.3, draw: 33.4, away: 33.3 };
     this.score = this.model ? this.model.scoreAt(this.ts) : { home: 0, away: 0 };
+    // Re-anchor the held front to the landing point so a seek INTO a suspension
+    // window emits the correct (held pre-goal) front, not a stale one from wherever
+    // the playhead was before the seek. Without this, scrubbing into a goal's dark
+    // window left the trench frozen at the previous position.
+    this._lastFront = frontFromProb(this.prob);
     this.darkMs = 0;
     // Reconstruct market-dark state at the landing point so seeking (even paused)
     // INTO a suspension renders the fog — the renderer keys fog off frame.market
