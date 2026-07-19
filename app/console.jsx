@@ -326,15 +326,49 @@
   const Muted = ({ children }) => <div style={{ color: DIM, fontSize: 11, padding: '18px 4px', textAlign: 'center' }}>{children}</div>;
   const Row = ({ k, v }) => <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: `1px solid ${LINE}` }}><span style={{ fontSize: 10, letterSpacing: 1, color: DIM }}>{k}</span><span style={{ fontFamily: MONO, fontSize: 12, color: INK, textAlign: 'right' }}>{v}</span></div>;
 
+  // ── share helpers (robust across form factors / non-secure LAN origins) ────
+  // The main diorama is the largest canvas (a desktop build also has the tiny
+  // sparkline canvas); pick by area so the poster never grabs the wrong one.
+  function mainCanvas() {
+    let best = null, area = 0;
+    for (const c of document.querySelectorAll('canvas')) { const a = (c.width || 0) * (c.height || 0); if (a > area) { area = a; best = c; } }
+    return best;
+  }
+  // clipboard write fails on a LAN http:// origin (Clipboard API is secure-context
+  // only) — fall back to a hidden textarea + execCommand so copy still works there.
+  function legacyCopy(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+    } catch (_) { return false; }
+  }
+  // toBlob + object URL downloads far more reliably than a multi-MB data: URL anchor
+  // (Safari/iOS especially); dataURL is the last-ditch fallback.
+  function saveImage(canvas, name) {
+    return new Promise((resolve) => {
+      const go = (href, revoke) => { const a = document.createElement('a'); a.download = name; a.href = href; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); if (revoke) setTimeout(() => URL.revokeObjectURL(href), 4000); resolve(true); };
+      try { canvas.toBlob((blob) => { blob ? go(URL.createObjectURL(blob), true) : go(canvas.toDataURL('image/png'), false); }, 'image/png'); }
+      catch (_) { try { go(canvas.toDataURL('image/png'), false); } catch (e) { resolve(false); } }
+    });
+  }
+
   // ── share sheet ───────────────────────────────────────────────────────────
   function ShareSheet({ onClose }) {
-    const [copied, setCopied] = useState(false);
+    const [copied, setCopied] = useState(null);
     const url = B().shareUrl ? B().shareUrl() : location.href;
     const [posterMsg, setPosterMsg] = useState(null);
+    const doCopy = async () => {
+      let ok = false;
+      try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(url); ok = true; } } catch (_) {}
+      if (!ok) ok = legacyCopy(url);
+      setCopied(ok ? 'COPIED ✓' : 'COPY FAILED — LONG-PRESS LINK');
+      setTimeout(() => setCopied(null), ok ? 1600 : 2800);
+    };
     const poster = async () => {
-      const src = document.querySelector('canvas');
+      const src = mainCanvas();
       if (!src) return;
-      const dl = (dataUrl, name) => { const a = document.createElement('a'); a.download = name; a.href = dataUrl; a.click(); };
       try {
         if (document.fonts && document.fonts.ready) await document.fonts.ready;
         const st = B().getState ? B().getState() : {};
@@ -383,19 +417,20 @@
         g.fillText(`${Math.round(prob.away)}% ${aa}`, bx + bw, by + bh + 26);
         g.textAlign = 'center'; g.fillStyle = 'rgba(143,196,236,.75)'; g.font = '600 18px "IBM Plex Mono", monospace';
         g.fillText('every troop is real, anchored TxLINE market data · proven on Solana', W / 2, H - 28);
-        dl(oc.toDataURL('image/png'), `battlefield-${ha}-${aa}.png`);
+        await saveImage(oc, `battlefield-${ha}-${aa}.png`);
         setPosterMsg('POSTER SAVED ✓'); setTimeout(() => setPosterMsg(null), 1800);
       } catch (e) {
-        dl(src.toDataURL('image/png'), 'battlefield.png');
-        setPosterMsg('SAVED (raw) ✓'); setTimeout(() => setPosterMsg(null), 1800);
+        try { await saveImage(src, 'battlefield.png'); setPosterMsg('SAVED (raw) ✓'); }
+        catch (_) { setPosterMsg('EXPORT FAILED — SCREENSHOT INSTEAD'); }
+        setTimeout(() => setPosterMsg(null), 2200);
       }
     };
     return (
       <Sheet title="SHARE THE WAR" onClose={onClose}>
         <Muted>A replay link restores the exact fixture and moment. A poster-frame snapshots the terrain — scars and all.</Muted>
         <div style={{ fontFamily: MONO, fontSize: 10, color: '#8fc4ec', wordBreak: 'break-all', padding: '10px 12px', background: 'rgba(255,255,255,.03)', border: `1px solid ${LINE}`, borderRadius: 9, marginBottom: 10 }}>{url}</div>
-        <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1600); }}
-          style={{ width: '100%', padding: 12, marginBottom: 8, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#0d0b05', background: GOLD, border: 'none', borderRadius: 10, cursor: 'pointer' }}>{copied ? 'COPIED ✓' : 'COPY REPLAY LINK'}</button>
+        <button onClick={doCopy}
+          style={{ width: '100%', padding: 12, marginBottom: 8, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#0d0b05', background: GOLD, border: 'none', borderRadius: 10, cursor: 'pointer' }}>{copied || 'COPY REPLAY LINK'}</button>
         <button onClick={poster} style={{ width: '100%', padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>{posterMsg || 'EXPORT POSTER FRAME (PNG)'}</button>
       </Sheet>
     );
