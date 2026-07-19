@@ -33,7 +33,7 @@ main broken. Playwright-verify each phase phone-portrait (402×874) first.
 ### P1 — Product gaps
 | ID | Acceptance criterion | Status |
 |---|---|---|
-| C1 | Tap threat flare / fog / frontline each opens the inspect sheet with real payload data (Playwright taps all three during ENG–ARG replay) | PENDING |
+| C1 | Tap threat flare / fog / frontline each opens the inspect sheet with real payload data (Playwright taps all three during ENG–ARG replay) | **PASS** — InspectHotspots overlay: small FRONT chip (de-margined 1X2 triplet) + long-press canvas, fog chip "MARKET DARK · TAP" (suspension gap+duration), flare chip (PossibleEvent, real side). InspectSheet takes a subject w/ headline, reuses proof walk. Playwright: all 3 open w/ real payload tied to fixture 18241006; 0 console errors. |
 | C2 | Real Phantom (`window.phantom.solana`) connect + signMessage; graceful fallback w/ install link + continue-as-guest; record persists across reload keyed to pubkey; DevNet badge stays | PENDING |
 | C3 | Wallet sheet redesign: no wrapped-orphan/misaligned text at 360/402/430px; copy ≤ half current length; game-flavored, centered, icons over words | PENDING |
 | C4 | Game loop: pick-a-side; two correct calls in a row show streak=2 w/ multiplier; wrong call resets; running points total in HUD; state survives reload | PENDING |

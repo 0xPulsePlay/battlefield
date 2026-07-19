@@ -187,15 +187,71 @@
     );
   }
 
+  // ── subject headline — the "which pixel did I tap" panel above the raw tick ──
+  // Every inspect target (war-feed tap, VERIFY, or a tap on the flare / fog / trench)
+  // lands in the SAME sheet + proof walk; only this header changes.
+  const INSPECT_TITLE = { tick: 'INSPECT THIS TICK', frontline: 'THE FRONTLINE', fog: 'FOG OF WAR', flare: 'THREAT FLARE' };
+  function SubjectHeadline({ subject, ident }) {
+    if (!subject || subject.kind === 'tick') return null;
+    const ha = ident.homeAbbr || 'HOME', aa = ident.awayAbbr || 'AWAY';
+    if (subject.kind === 'frontline') {
+      const p = subject.prob || { home: 33.3, draw: 33.4, away: 33.3 };
+      const bars = [[ha, p.home, '#d3273e'], ['DRAW', p.draw, 'rgba(210,220,205,.5)'], [aa, p.away, '#7ab5e8']];
+      return (
+        <div style={{ padding: '4px 0 12px' }}>
+          <div style={{ fontSize: 9, letterSpacing: 1.5, color: DIM, marginBottom: 8 }}>DE-MARGINED 1X2 · THE TRUE PROBABILITY DRIVING THE TRENCH</div>
+          {bars.map(([k, v, c]) => (
+            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
+              <span style={{ width: 42, fontFamily: MONO, fontSize: 10, fontWeight: 700, color: INK }}>{k}</span>
+              <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,.06)', overflow: 'hidden' }}><div style={{ width: `${Math.max(0, Math.min(100, v))}%`, height: '100%', background: c, borderRadius: 4 }} /></div>
+              <span style={{ width: 44, textAlign: 'right', fontFamily: MONO, fontSize: 12, fontWeight: 700, color: INK }}>{v.toFixed(1)}%</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    if (subject.kind === 'fog') {
+      const g = subject.gap || {};
+      const fmtsec = (s) => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
+      return (
+        <div style={{ padding: '4px 0 12px' }}>
+          <div style={{ fontSize: 9, letterSpacing: 1.5, color: DIM, marginBottom: 8 }}>THE MARKET WENT DARK — REAL TxLINE SUSPENSION WINDOW</div>
+          <Row k="Opened at" v={g.startSec != null ? fmtsec(g.startSec) : '—'} />
+          <Row k="Reopens at" v={g.endSec != null ? fmtsec(g.endSec) : '—'} />
+          <Row k="Duration" v={g.durMs != null ? `${(g.durMs / 1000).toFixed(0)}s dark` : '—'} />
+          <div style={{ marginTop: 8, fontSize: 9, color: DIM, lineHeight: 1.5 }}>The sparkline leaves this gap unfilled — a book that suspended around a material event, never interpolated.</div>
+        </div>
+      );
+    }
+    if (subject.kind === 'flare') {
+      const nm = subject.side === 'home' ? (ident.homeName || 'HOME') : subject.side === 'away' ? (ident.awayName || 'AWAY') : 'THE MATCH';
+      const evLabel = { goal: 'GOAL THREAT', penalty: 'PENALTY THREAT', corner: 'CORNER', var: 'VAR CHECK', redCard: 'RED CARD REVIEW', yellowCard: 'CAUTION' }[subject.event] || 'THREAT';
+      return (
+        <div style={{ padding: '4px 0 12px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderRadius: 10, background: 'rgba(211,171,72,.12)', border: '1px solid rgba(211,171,72,.4)' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round"><path d="M12 2v6M12 22a7 7 0 007-7c0-3-2-5-3-8-1 2-2 3-4 3-1 0-2-1-2-3-2 2-4 5-4 8a7 7 0 007 7z" /></svg>
+            <span style={{ fontFamily: COND, fontSize: 15, fontWeight: 700, letterSpacing: 1, color: GOLD }}>{nm} · {evLabel}</span>
+          </div>
+          <div style={{ marginTop: 10, fontSize: 9.5, color: DIM, lineHeight: 1.5 }}>The feed's <b style={{ color: INK }}>PossibleEvent</b> predictor lit this flare — the market's live read that something is about to happen. The raw state below is the tick it fired on.</div>
+        </div>
+      );
+    }
+    return null;
+  }
+
   // ── inspect + Merkle proof walk ───────────────────────────────────────────
-  function InspectSheet({ onClose, seq }) {
+  function InspectSheet({ onClose, subject }) {
+    const subj = subject || { kind: 'tick' };
+    const ident = (B().getIdent && B().getIdent()) || {};
     const [phase, setPhase] = useState('loading'); // loading|state|proof|error
     const [state, setState] = useState(null);
     const [proof, setProof] = useState(null);
     const [browser, setBrowser] = useState(null); // { status:'pending'|'ok'|'error', res?, err? }
     const [err, setErr] = useState(null);
     useEffect(() => {
-      const load = (seq != null && B().stateAtSeq) ? B().stateAtSeq(seq) : B().stateAtTs(B().headTs ? B().headTs() : 0);
+      const seq = subj.seq;
+      const ts = subj.ts != null ? subj.ts : (B().headTs ? B().headTs() : 0);
+      const load = (seq != null && B().stateAtSeq) ? B().stateAtSeq(seq) : B().stateAtTs(ts);
       load.then((st) => { setState(st); setPhase('state'); }).catch((e) => { setErr(String(e.message || e)); setPhase('error'); });
     }, []);
     const verify = async () => {
@@ -218,12 +274,13 @@
     };
     const hex = (arr) => (arr || []).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16) + '…';
     return (
-      <Sheet title="INSPECT THIS TICK" onClose={onClose} accent="#7ab5e8">
+      <Sheet title={INSPECT_TITLE[subj.kind] || 'INSPECT THIS TICK'} onClose={onClose} accent="#7ab5e8">
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {phase === 'loading' && <Muted>Reading market state at the frontline…</Muted>}
           {phase === 'error' && <Muted>Could not read this tick: {err}</Muted>}
           {(phase === 'state' || phase.startsWith('proof')) && state && (
             <div>
+              <SubjectHeadline subject={subj} ident={ident} />
               <Row k="Fixture" v={state.fixtureId} />
               <Row k="Sequence" v={`#${state.seq}`} />
               <Row k="Match clock" v={clockLabel(state)} />
@@ -558,18 +615,93 @@
   function loadRecord() { try { return JSON.parse(localStorage.getItem('bf_record') || '{"made":0,"correct":0,"pts":0}'); } catch { return { made: 0, correct: 0, pts: 0 }; } }
   function bumpRecord(correct, pts) { const r = loadRecord(); r.made++; if (correct) r.correct++; r.pts += pts; try { localStorage.setItem('bf_record', JSON.stringify(r)); } catch {} return r; }
 
+  // which threat flare (if any) is lit on the diorama right now
+  function flareOf(threat) {
+    const t = threat || {};
+    for (const side of ['home', 'away']) {
+      const s = t[side] || {};
+      if (s.goal) return { side, event: 'goal' };
+      if (s.penalty) return { side, event: 'penalty' };
+      if (s.corner) return { side, event: 'corner' };
+    }
+    const n = t.neutral || {};
+    if (n.var) return { side: 'neutral', event: 'var' };
+    if (n.redCard) return { side: 'neutral', event: 'redCard' };
+    if (n.yellowCard) return { side: 'neutral', event: 'yellowCard' };
+    return null;
+  }
+
+  // ── every-pixel-inspectable overlay: tap the flare / fog / frontline ────────
+  // Small hit targets over the live diorama that each open the SAME inspect sheet
+  // with the real payload behind that pixel. Kept tiny so the engine's own camera
+  // orbit (drag anywhere else on the canvas) still works; the frontline also
+  // responds to a long-press (desktop: click the FRONT chip).
+  function InspectHotspots({ onInspect, mode }) {
+    const snap = useSnap();
+    const f = snap.frame;
+    const openFront = useCallback(() => { const fr = B().getFrame && B().getFrame(); if (!fr) return; onInspect({ kind: 'frontline', prob: fr.prob, front: fr.front, ts: B().headTs ? B().headTs() : 0 }); }, [onInspect]);
+    const openFog = useCallback(() => {
+      const ts = B().headTs ? B().headTs() : 0; const m = B().getModel && B().getModel();
+      const w = m && m.inSuspension ? m.inSuspension(ts) : null;
+      const g = (w && m) ? { startSec: m.displayClock(w.goalTs != null ? w.goalTs : w.start).sec, endSec: m.displayClock(w.end).sec, durMs: w.end - (w.goalTs != null ? w.goalTs : w.start) } : {};
+      onInspect({ kind: 'fog', ts, gap: g });
+    }, [onInspect]);
+    const openFlare = useCallback(() => { const fr = B().getFrame && B().getFrame(); const fl = fr && flareOf(fr.threat); if (!fl) return; onInspect({ kind: 'flare', side: fl.side, event: fl.event, ts: B().headTs ? B().headTs() : 0 }); }, [onInspect]);
+    // long-press the trench (the canvas) → frontline odds; a drag = camera orbit, left alone.
+    useEffect(() => {
+      if (mode === 'sandbox' || mode === 'synthetic') return;
+      const cv = mainCanvas(); if (!cv) return;
+      let t = null, sx = 0, sy = 0, moved = false;
+      const down = (e) => { sx = e.clientX; sy = e.clientY; moved = false; clearTimeout(t); t = setTimeout(() => { if (!moved) openFront(); }, 480); };
+      const move = (e) => { if (!moved && (Math.abs(e.clientX - sx) > 12 || Math.abs(e.clientY - sy) > 12)) { moved = true; clearTimeout(t); } };
+      const up = () => clearTimeout(t);
+      cv.addEventListener('pointerdown', down); cv.addEventListener('pointermove', move);
+      cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+      return () => { clearTimeout(t); cv.removeEventListener('pointerdown', down); cv.removeEventListener('pointermove', move); cv.removeEventListener('pointerup', up); cv.removeEventListener('pointercancel', up); };
+    }, [mode, openFront]);
+    if (mode === 'sandbox' || mode === 'synthetic' || !f) return null;
+    const suspended = f.market && f.market.suspended;
+    const flare = flareOf(f.threat);
+    const ha = (snap.ident && snap.ident.homeAbbr) || 'HOME', aa = (snap.ident && snap.ident.awayAbbr) || 'AWAY';
+    const flareTop = flare ? (flare.side === 'home' ? '64%' : flare.side === 'away' ? '29%' : '46%') : null;
+    const chip = { position: 'fixed', zIndex: 43, pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: MONO, fontWeight: 700, WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' };
+    return (
+      <React.Fragment>
+        {!suspended && (
+          <button onClick={openFront} aria-label="Inspect the frontline odds" style={{ ...chip, left: 12, top: '50%', transform: 'translateY(-50%)', padding: '7px 10px', borderRadius: 9, border: `1px solid ${LINE}`, background: PANEL, color: INK, fontSize: 9.5, letterSpacing: 1 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fc4ec" strokeWidth="2"><circle cx="12" cy="12" r="8" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>
+            {ha} {(f.prob.home || 0).toFixed(0)}%
+          </button>
+        )}
+        {suspended && (
+          <button onClick={openFog} aria-label="Inspect the suspension" style={{ ...chip, left: '50%', top: '42%', transform: 'translateX(-50%)', padding: '8px 13px', borderRadius: 10, border: '1px solid rgba(211,171,72,.5)', background: 'rgba(8,12,8,.85)', color: GOLD, fontSize: 10, letterSpacing: 1.5, animation: 'pulseGold 1.4s infinite' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round"><path d="M3 8h18M3 12h18M3 16h13" /></svg>
+            MARKET DARK · TAP TO INSPECT
+          </button>
+        )}
+        {flare && (
+          <button onClick={openFlare} aria-label="Inspect the threat flare" style={{ ...chip, left: '50%', top: flareTop, transform: 'translateX(-50%)', padding: '6px 11px', borderRadius: 20, border: '1px solid rgba(211,171,72,.55)', background: 'rgba(20,14,6,.85)', color: GOLD, fontSize: 9, letterSpacing: 1 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l9 16H3z" /><path d="M12 10v4M12 17h.01" /></svg>
+            {flare.side === 'neutral' ? 'FLARE' : (flare.side === 'home' ? ha : aa)} · TAP
+          </button>
+        )}
+      </React.Fragment>
+    );
+  }
+
   // ── root ──────────────────────────────────────────────────────────────────
   function BattleConsole() {
     const [ready, setReady] = useState(!!window.BATTLE);
     const [sheet, setSheet] = useState(null);
-    const [inspectSeq, setInspectSeq] = useState(null);
+    const [inspectSubject, setInspectSubject] = useState(null);
     const [wallet, setWallet] = useState(() => { try { return localStorage.getItem('bf_wallet') || null; } catch { return null; } });
     const [mode, setMode] = useState('replay');
+    const openInspect = useCallback((subject) => { setInspectSubject(subject); setSheet('inspect'); B().setPaused && B().setPaused(true); }, []);
     useEffect(() => {
       if (!ready || !B().onEvent) return;
-      return B().onEvent((e) => { if (e.kind === 'inspect') { setInspectSeq(e.seq); setSheet('inspect'); B().setPaused && B().setPaused(true); } });
-    }, [ready]);
-    const openSheet = (s) => { if (s === 'inspect') setInspectSeq(null); setSheet(s); };
+      return B().onEvent((e) => { if (e.kind === 'inspect') openInspect({ kind: 'tick', seq: e.seq }); });
+    }, [ready, openInspect]);
+    const openSheet = (s) => { if (s === 'inspect') setInspectSubject({ kind: 'tick' }); setSheet(s); };
     useEffect(() => {
       if (ready) return;
       const iv = setInterval(() => { if (window.BATTLE) { clearInterval(iv); setReady(true); } }, 120);
@@ -590,9 +722,10 @@
       <React.Fragment>
         <TopChrome onOpen={openSheet} mode={mode} wallet={wallet} />
         <Scrubber />
+        <InspectHotspots onInspect={openInspect} mode={mode} />
         <PredictAlong wallet={wallet} />
         {sheet === 'picker' && <FixturePicker onClose={() => setSheet(null)} />}
-        {sheet === 'inspect' && <InspectSheet seq={inspectSeq} onClose={() => setSheet(null)} />}
+        {sheet === 'inspect' && <InspectSheet subject={inspectSubject} onClose={() => setSheet(null)} />}
         {sheet === 'share' && <ShareSheet onClose={() => setSheet(null)} />}
         {sheet === 'wallet' && <WalletSheet onClose={() => setSheet(null)} onConnect={connect} wallet={wallet} />}
       </React.Fragment>
