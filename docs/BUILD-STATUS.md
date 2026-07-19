@@ -13,9 +13,9 @@ Run: `npm run dev` (→ :4400) · rooms: `npm run rooms` (→ :4490) · tests: `
 | ID | Acceptance criterion | Status |
 |---|---|---|
 | G1 | Room usernames: name on create/join (pre-filled, editable, persisted, broadcast, shown on roster); rename propagates | **PASS** — "YOU" name input in the share sheet (pre-filled short pubkey / GUEST-xxx, ≤20 chars, sanitized, persisted to bf_room_name); join/create/rename broadcast it; room-store handles `name` (+1 test, 44/44). Playwright: A/B set Alice/Bob, both see both; A→Alicia propagates to B. |
-| G2 | Desktop: points/streak visually adjacent to the RAID card; no overlap w/ console columns at 1440×900 | PENDING |
-| G3 | Mobile: the frontline-stats chip renamed to say what it does + repositioned; no collision at 360/402/430 | PENDING |
-| G4 | Mobile: holistic floating-panel pass (nav de-squished, points/side rehomed, leaderboard rehomed, no empty gap); screenshots at 360/402/430 no overlaps/orphans, 0 console errors | PENDING |
+| G2 | Desktop: points/streak visually adjacent to the RAID card; no overlap w/ console columns at 1440×900 | **PASS** — CampaignHUD desktop home = right side at top:27%, directly above where the RAID card appears. Playwright 1440×900: points chip 20px above the RAID card, no overlap with MATCH STATS / WAR FEED columns. |
+| G3 | Mobile: the frontline-stats chip renamed to say what it does + repositioned; no collision at 360/402/430 | **PASS** — the bare "ENG 36%" chip is now a two-line "FRONTLINE ODDS / ENG 36%" tab (left-center), aria-labelled; clears other HUD at all widths. |
+| G4 | Mobile: holistic floating-panel pass (nav de-squished, points/side rehomed, leaderboard rehomed, no empty gap); screenshots at 360/402/430 no overlaps/orphans, 0 console errors | **PASS** — recomposed: nav auto-compacts <420px (drops MATCHES label, keeps flags+▾) → fits 360/402/430; CampaignHUD moved to bottom-right (fills the empty gap, out of the score); RoomPanel is now a tiny top-left pill (clears the centred score) that expands to the roster on tap. Playwright: nav no overflow at 360/402/430, RAID+points stack without overlap, full cold journey 0 console errors. |
 
 ---
 

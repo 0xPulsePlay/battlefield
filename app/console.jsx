@@ -34,6 +34,17 @@
       dangerouslySetInnerHTML={{ __html: html }} />;
   }
 
+  function useIsDesktop() {
+    const [d, setD] = useState(() => typeof matchMedia !== 'undefined' && matchMedia('(min-width:1024px)').matches);
+    useEffect(() => { if (typeof matchMedia === 'undefined') return; const mq = matchMedia('(min-width:1024px)'); const on = () => setD(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on); }, []);
+    return d;
+  }
+  function useNarrow(px = 420) {
+    const [n, setN] = useState(() => typeof window !== 'undefined' && window.innerWidth < px);
+    useEffect(() => { const on = () => setN(window.innerWidth < px); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on); }, [px]);
+    return n;
+  }
+
   // subscribe to the 4Hz frame feed
   function useSnap() {
     const [snap, setSnap] = useState(() => (B().getState ? B().getState() : {}));
@@ -49,34 +60,36 @@
   // ── top chrome: match chip (left) · mode+wallet+share (right) ─────────────
   function TopChrome({ onOpen, mode, wallet }) {
     const snap = useSnap();
+    const narrow = useNarrow();
     const id = snap.ident || {};
     const sandbox = mode === 'sandbox' || mode === 'synthetic';
     const live = mode === 'live';
     const modeLabel = sandbox ? 'SANDBOX' : live ? 'LIVE' : 'REPLAY';
     const modeColor = sandbox ? '#c9b6f0' : live ? '#7ed992' : GOLD;
     const modeBorder = sandbox ? 'rgba(155,125,232,.45)' : live ? 'rgba(126,217,146,.4)' : 'rgba(211,171,72,.4)';
+    const pill = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: narrow ? '6px 8px' : '6px 9px', height: 30, boxSizing: 'border-box', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1, borderRadius: 10 };
     return (
-      <div style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 8px)', left: 0, right: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 10px', zIndex: 46, pointerEvents: 'none' }}>
-        <button onClick={() => onOpen('picker')} style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 11px 7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: INK, border: `1px solid ${LINE}`, background: PANEL, borderRadius: 10, cursor: 'pointer', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
+      <div style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 8px)', left: 0, right: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, padding: '0 10px', zIndex: 46, pointerEvents: 'none' }}>
+        <button onClick={() => onOpen('picker')} style={{ pointerEvents: 'auto', flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: narrow ? 5 : 7, padding: narrow ? '7px 9px 7px 8px' : '7px 11px 7px 8px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: INK, border: `1px solid ${LINE}`, background: PANEL, borderRadius: 10, cursor: 'pointer', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
           <Flag name={id.homeNation || 'England'} w={18} />
-          <span style={{ opacity: .55, fontSize: 9 }}>v</span>
+          {!narrow && <span style={{ opacity: .55, fontSize: 9 }}>v</span>}
           <Flag name={id.awayNation || 'Argentina'} w={18} />
-          <span style={{ marginLeft: 4, color: GOLD }}>MATCHES</span>
-          <span style={{ opacity: .5 }}>▾</span>
+          {!narrow && <span style={{ marginLeft: 4, color: GOLD }}>MATCHES</span>}
+          <span style={{ opacity: .5, marginLeft: narrow ? 2 : 0 }}>▾</span>
         </button>
-        <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 9px', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: modeColor, border: `1px solid ${modeBorder}`, background: PANEL, borderRadius: 10 }}>
+        <div style={{ display: 'flex', gap: narrow ? 4 : 6, pointerEvents: 'auto', flex: '0 1 auto', minWidth: 0 }}>
+          <span style={{ ...pill, flex: '0 0 auto', letterSpacing: 1.5, color: modeColor, border: `1px solid ${modeBorder}`, background: PANEL }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: modeColor, animation: 'blinkDot 1.6s infinite' }} />{modeLabel}
           </span>
-          {!sandbox && <Btn onClick={() => onOpen('inspect')} title="Verify this tick on-chain" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 9px', height: 30, borderRadius: 10, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: '#8fc4ec' }}>
+          {!sandbox && <Btn onClick={() => onOpen('inspect')} title="Verify this tick on-chain" style={{ ...pill, color: '#8fc4ec' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8fc4ec" strokeWidth="2"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z" /><path d="M9 12l2 2 4-4" /></svg>VERIFY
           </Btn>}
-          <Btn onClick={() => onOpen('share')} title="Share this moment" style={{ width: 34, height: 30, borderRadius: 10, display: 'grid', placeItems: 'center', padding: 0 }}>
+          <Btn onClick={() => onOpen('share')} title="Share this moment" style={{ width: 34, height: 30, borderRadius: 10, display: 'grid', placeItems: 'center', padding: 0, flex: '0 0 auto' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={INK} strokeWidth="2"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" /></svg>
           </Btn>
-          <button onClick={() => onOpen('wallet')} title={wallet ? 'Guest ID · devnet' : 'Guest identity (devnet)'} style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 5, padding: '6px 9px', height: 30, boxSizing: 'border-box', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: wallet ? '#7ed992' : DIM, border: `1px solid ${wallet ? 'rgba(126,217,146,.4)' : LINE}`, background: PANEL, borderRadius: 10, cursor: 'pointer' }}>
+          <button onClick={() => onOpen('wallet')} title={wallet ? 'Your identity · devnet' : 'Enlist (devnet)'} style={{ ...pill, pointerEvents: 'auto', flex: '0 0 auto', gap: wallet && !narrow ? 5 : 0, color: wallet ? '#7ed992' : DIM, border: `1px solid ${wallet ? 'rgba(126,217,146,.4)' : LINE}`, background: PANEL, cursor: 'pointer', width: (wallet && !narrow) ? 'auto' : 34, justifyContent: 'center' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="6" width="20" height="13" rx="2" /><path d="M16 12h2" /></svg>
-            {wallet ? wallet.slice(0, 4) + '…' : ''}
+            {wallet && !narrow ? wallet.slice(0, 4) + '…' : ''}
           </button>
         </div>
       </div>
@@ -739,18 +752,24 @@
   }
 
   // ── campaign HUD chip (points + streak + your side) ────────────────────────
+  // Desktop: right side, just above where the RAID card appears — stake + payoff read
+  // as one moment (G2). Mobile: bottom-right, filling the corner next to the transport
+  // (out of the top where it used to cover the score) (G4).
   function CampaignHUD({ side, onPickSide }) {
     const snap = useSnap();
+    const isDesktop = useIsDesktop();
     const [rec, setRec] = useState(loadRecord);
     useEffect(() => { const on = (e) => setRec(e.detail || loadRecord()); window.addEventListener('bf-record', on); return () => window.removeEventListener('bf-record', on); }, []);
     if (snap.mode === 'sandbox' || snap.mode === 'synthetic') return null;
     const id = snap.ident || {};
     const sideName = side === 'home' ? (id.homeAbbr || 'HOME') : side === 'away' ? (id.awayAbbr || 'AWAY') : null;
+    const sideCol = side === 'home' ? '#e88a8a' : side === 'away' ? '#7ab5e8' : GOLD;
+    const pos = isDesktop ? { right: 20, top: '27%' } : { right: 12, bottom: 'calc(env(safe-area-inset-bottom) + 14px)' };
     return (
-      <div style={{ position: 'fixed', left: 10, top: 'calc(env(safe-area-inset-top) + 52px)', zIndex: 43, pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderRadius: 9, border: `1px solid ${LINE}`, background: PANEL, WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
+      <div style={{ position: 'fixed', ...pos, zIndex: 43, pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 10, border: `1px solid ${LINE}`, background: PANEL, WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinejoin="round"><path d="M12 2l3 6 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 9l6-1z" /></svg>
-          <span style={{ fontFamily: COND, fontSize: 18, fontWeight: 700, color: '#f0f3ec', lineHeight: 1 }}>{rec.pts}</span>
+          <span style={{ fontFamily: COND, fontSize: 19, fontWeight: 700, color: '#f0f3ec', lineHeight: 1 }}>{rec.pts}</span>
           <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1.5, color: DIM }}>PTS</span>
           {rec.streak >= 2 && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 1 }}>
@@ -759,9 +778,9 @@
             </span>
           )}
         </div>
-        <button onClick={onPickSide} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${LINE}`, background: PANEL, cursor: 'pointer', WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
-          <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1, color: DIM }}>FIGHTING FOR</span>
-          {sideName ? <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: side === 'home' ? '#e88a8a' : '#7ab5e8' }}>{sideName}</span> : <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: GOLD }}>PICK ›</span>}
+        <button onClick={onPickSide} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 8, border: `1px solid ${LINE}`, background: PANEL, cursor: 'pointer', WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
+          <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1, color: DIM }}>FOR</span>
+          {sideName ? <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: sideCol }}>{sideName}</span> : <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: GOLD }}>PICK ›</span>}
         </button>
       </div>
     );
@@ -861,9 +880,12 @@
     return (
       <React.Fragment>
         {!suspended && (
-          <button onClick={openFront} aria-label="Inspect the frontline odds" style={{ ...chip, left: 12, top: '50%', transform: 'translateY(-50%)', padding: '7px 10px', borderRadius: 9, border: `1px solid ${LINE}`, background: PANEL, color: INK, fontSize: 9.5, letterSpacing: 1 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fc4ec" strokeWidth="2"><circle cx="12" cy="12" r="8" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>
-            {ha} {(f.prob.home || 0).toFixed(0)}%
+          <button onClick={openFront} aria-label="Inspect the frontline odds (de-margined 1X2)" style={{ ...chip, flexDirection: 'column', alignItems: 'flex-start', gap: 1, left: 10, top: '47%', transform: 'translateY(-50%)', padding: '6px 9px', borderRadius: 9, border: `1px solid ${LINE}`, background: PANEL, color: INK }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 7.5, fontWeight: 700, letterSpacing: 1, color: DIM }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8fc4ec" strokeWidth="2"><circle cx="12" cy="12" r="8" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>
+              FRONTLINE ODDS
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5 }}>{ha} {(f.prob.home || 0).toFixed(0)}%</span>
           </button>
         )}
         {suspended && (
@@ -992,34 +1014,66 @@
     return { room, join, leave, create, rename, myId: () => idRef.current };
   }
 
-  function RoomPanel({ room, myId, onLeave }) {
+  // Desktop: a persistent leaderboard top-right. Mobile: a compact pill that clears
+  // the centred score and expands to the roster on tap (never covers the battle
+  // unless you open it) (G4). Your own name is editable inline (G1).
+  function RoomPanel({ room, myId, onLeave, onRename }) {
+    const isDesktop = useIsDesktop();
+    const [open, setOpen] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [nm, setNm] = useState('');
     if (!room) return null;
     const offline = room.status === 'offline';
     const me = myId();
+    const members = room.members || [];
+    const myRank = (() => { const i = members.findIndex((m) => m.id === me); return i >= 0 ? i + 1 : null; })();
     const flame = (n) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}><svg width="9" height="9" viewBox="0 0 24 24" fill={GOLD}><path d="M12 2c1 3 4 4 4 8a4 4 0 01-8 0c0-1 .5-2 1-2.5C9 8 12 6 12 2z" /></svg><span style={{ fontSize: 8, fontWeight: 700, color: GOLD }}>{n}</span></span>;
-    return (
-      <div style={{ position: 'fixed', right: 10, top: 'calc(env(safe-area-inset-top) + 52px)', zIndex: 44, width: 172, pointerEvents: 'auto' }}>
-        <div style={{ background: PANEL, border: `1px solid ${offline ? 'rgba(232,138,138,.4)' : LINE}`, borderRadius: 11, padding: '8px 10px', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2"><circle cx="9" cy="8" r="3" /><path d="M15 8a3 3 0 100-2M3 20c0-3 3-5 6-5s6 2 6 5M15 15c3 0 6 2 6 5" /></svg>
-            <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: INK }}>ROOM {room.code}</span>
-            <div style={{ flex: 1 }} />
-            <button onClick={onLeave} aria-label="Leave room" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${LINE}`, background: 'rgba(255,255,255,.05)', color: DIM, cursor: 'pointer', fontSize: 9, lineHeight: 1, padding: 0 }}>✕</button>
-          </div>
-          {offline ? (
-            <div style={{ fontSize: 8.5, color: '#e8c98a', letterSpacing: .5 }}>rooms offline · playing solo</div>
-          ) : (room.members && room.members.length) ? (
-            room.members.slice(0, 6).map((m, i) => (
-              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', borderTop: i ? '1px solid rgba(255,255,255,.05)' : 'none' }}>
-                <span style={{ fontFamily: MONO, fontSize: 9, color: DIM, width: 10 }}>{i + 1}</span>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', flex: '0 0 auto', background: m.side === 'home' ? '#e88a8a' : m.side === 'away' ? '#7ab5e8' : 'rgba(255,255,255,.3)' }} />
-                <span style={{ flex: 1, fontFamily: MONO, fontSize: 9.5, fontWeight: m.id === me ? 700 : 500, color: m.id === me ? GOLD : INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
-                {m.streak >= 2 && flame(m.streak)}
-                <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: m.id === me ? GOLD : INK }}>{m.pts}</span>
-              </div>
-            ))
-          ) : <div style={{ fontSize: 8.5, color: DIM }}>{room.status === 'connecting' ? 'connecting…' : 'waiting for players…'}</div>}
+    const startEdit = () => { const mine = members.find((m) => m.id === me); setNm(mine ? mine.name : ''); setEditing(true); };
+    const commitEdit = () => { const v = nm.trim(); if (v && onRename) onRename(v); setEditing(false); };
+    const box = (
+      <div style={{ background: PANEL, border: `1px solid ${offline ? 'rgba(232,138,138,.4)' : LINE}`, borderRadius: 11, padding: '8px 10px', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', width: 188, boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2"><circle cx="9" cy="8" r="3" /><path d="M15 8a3 3 0 100-2M3 20c0-3 3-5 6-5s6 2 6 5M15 15c3 0 6 2 6 5" /></svg>
+          <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: INK }}>ROOM {room.code}</span>
+          <div style={{ flex: 1 }} />
+          <button onClick={startEdit} aria-label="Rename yourself" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${LINE}`, background: 'rgba(255,255,255,.05)', color: DIM, cursor: 'pointer', padding: 0, display: 'grid', placeItems: 'center' }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
+          </button>
+          <button onClick={onLeave} aria-label="Leave room" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${LINE}`, background: 'rgba(255,255,255,.05)', color: DIM, cursor: 'pointer', fontSize: 9, lineHeight: 1, padding: 0 }}>✕</button>
         </div>
+        {editing && (
+          <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}>
+            <input value={nm} autoFocus onChange={(e) => setNm(e.target.value.replace(/[<>]/g, '').slice(0, 20))} onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); }} placeholder="your name" maxLength={20}
+              style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '5px 8px', fontFamily: MONO, fontSize: 11, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 7, outline: 'none' }} />
+            <button onClick={commitEdit} style={{ padding: '0 9px', fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#0d0b05', background: GOLD, border: 'none', borderRadius: 7, cursor: 'pointer' }}>OK</button>
+          </div>
+        )}
+        {offline ? (
+          <div style={{ fontSize: 8.5, color: '#e8c98a', letterSpacing: .5 }}>rooms offline · playing solo</div>
+        ) : members.length ? (
+          members.slice(0, 6).map((m, i) => (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', borderTop: i ? '1px solid rgba(255,255,255,.05)' : 'none' }}>
+              <span style={{ fontFamily: MONO, fontSize: 9, color: DIM, width: 10 }}>{i + 1}</span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', flex: '0 0 auto', background: m.side === 'home' ? '#e88a8a' : m.side === 'away' ? '#7ab5e8' : 'rgba(255,255,255,.3)' }} />
+              <span style={{ flex: 1, fontFamily: MONO, fontSize: 9.5, fontWeight: m.id === me ? 700 : 500, color: m.id === me ? GOLD : INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}{m.id === me ? ' ·you' : ''}</span>
+              {m.streak >= 2 && flame(m.streak)}
+              <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: m.id === me ? GOLD : INK }}>{m.pts}</span>
+            </div>
+          ))
+        ) : <div style={{ fontSize: 8.5, color: DIM }}>{room.status === 'connecting' ? 'connecting…' : 'waiting for players…'}</div>}
+      </div>
+    );
+    if (isDesktop) return <div style={{ position: 'fixed', right: 10, top: 'calc(env(safe-area-inset-top) + 52px)', zIndex: 44, pointerEvents: 'auto' }}>{box}</div>;
+    // mobile: collapsed pill top-left; tap to open the roster
+    return (
+      <div style={{ position: 'fixed', left: 10, top: 'calc(env(safe-area-inset-top) + 50px)', zIndex: 44, pointerEvents: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+        <button onClick={() => setOpen((o) => !o)} aria-label="Room leaderboard" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 9, border: `1px solid ${offline ? 'rgba(232,138,138,.4)' : LINE}`, background: PANEL, cursor: 'pointer', WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2"><circle cx="9" cy="8" r="3" /><path d="M15 8a3 3 0 100-2M3 20c0-3 3-5 6-5s6 2 6 5M15 15c3 0 6 2 6 5" /></svg>
+          <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: INK }}>{members.length}</span>
+          {myRank && !offline && <span style={{ fontFamily: MONO, fontSize: 8, color: DIM }}>#{myRank}</span>}
+          <span style={{ fontSize: 8, color: DIM, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>▾</span>
+        </button>
+        {open && box}
       </div>
     );
   }
