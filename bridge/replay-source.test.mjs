@@ -88,6 +88,17 @@ test('full time is past 90 minutes and progress spans 0..1', () => {
   assert.ok(model.progressToTs(0.5) > model.firstTs && model.progressToTs(0.5) < model.endTs);
 });
 
+test('additional_time events carry the real stoppage, not 0', () => {
+  const addl = model.eventTimeline.filter((e) => e.battleEvent.kind === 'additional_time');
+  assert.equal(addl.length, 2, 'expected two added-time announcements (H1 + H2)');
+  // H1 stoppage: the clock ran to 48:00, so 45+3
+  assert.ok(Math.abs(addl[0].sec - 45 * 60) < 60, 'first announced ~45:00');
+  assert.equal(addl[0].battleEvent.minutes, 3);
+  // H2 stoppage: the clock ran to 101:00, so 90+11
+  assert.ok(Math.abs(addl[1].sec - 90 * 60) < 60, 'second announced ~90:00');
+  assert.ok(addl[1].battleEvent.minutes >= 1, 'H2 added minutes must be non-zero');
+});
+
 test('eventsBetween returns only material events in the window', () => {
   const evs = model.eventsBetween(GOAL1_TS - 60000, GOAL1_TS + 60000);
   assert.ok(evs.some((e) => e.battleEvent.kind === 'goal'));

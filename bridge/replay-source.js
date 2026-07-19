@@ -171,10 +171,23 @@ export function buildReplayModel(fixtureResp, oddsResp) {
   // material events → {ts, battleEvent, raw}. The driver announces the single
   // match kickoff itself, so the timeline's per-half `kickoff` actions (which
   // would each reset the renderer) are excluded here.
+  // announced stoppage per phase: the clock segment already runs to the last real
+  // event minute of the half (e.g. H1 → 48:00), so added = segEnd − regulation.
+  const REG_BOUND = { H1: HALF_SEC, H2: HALF_SEC * 2, ET1: 6300, ET2: 7200 };
+  const addedMinutesForPhase = (phase) => {
+    const seg = clock.segs.find((s) => s.phase === phase);
+    const bound = REG_BOUND[phase];
+    if (!seg || bound == null) return 0;
+    return Math.max(0, Math.round((seg.sec1 - bound) / 60));
+  };
+
   const eventTimeline = [];
   for (const e of tl.events || []) {
     if (e.action === 'kickoff') continue;
     let ctx = { participant1IsHome: p1Home };
+    if (e.action === 'additional_time') {
+      ctx.minutes = addedMinutesForPhase(clock.tsToMatchSec(e.ts).phase);
+    }
     if (e.action === 'goal') {
       const from = probAtSamples(prob, e.ts - GOAL_LEAD_MS - 5000);
       const to = probAtSamples(prob, e.ts + GOAL_DARK_MS + GOAL_SETTLE_MS);

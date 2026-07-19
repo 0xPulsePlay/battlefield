@@ -135,7 +135,10 @@ export function actionToBattleEvent(ev, ctx = {}) {
     case 'substitution':
       return { kind: 'substitution', side: sideOf(ev.participant) };
     case 'additional_time': {
-      const minutes = ev.minutes ?? ev.detail?.Minutes ?? ev.Data?.Minutes ?? 0;
+      // The folded event carries `minute` (when it was announced), not the added
+      // amount. buildReplayModel derives the real stoppage from the clock segment
+      // and passes it via ctx.minutes; the raw fields are a fallback.
+      const minutes = ev.minutes ?? ctx.minutes ?? ev.detail?.Minutes ?? ev.Data?.Minutes ?? 0;
       return { kind: 'additional_time', minutes: Number(minutes) || 0 };
     }
     case 'var':

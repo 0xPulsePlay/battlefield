@@ -392,9 +392,14 @@ class Component extends DCLogic {
   }
 
   _clockFmt(c) {
-    const m = Math.floor(c.s / 60), sec = String(c.s % 60).padStart(2, '0');
-    const mm = m > 90 && c.phase !== 'FT' ? `90+${m - 90}` : String(m);
-    return `${mm}:${sec} · ${c.phase}`;
+    // stoppage is shown relative to each phase's regulation boundary: 45+n in H1,
+    // 90+n in H2, 105+n / 120+n in extra time (not a flat 90+ everywhere).
+    const sec = c.s | 0, ss = String(sec % 60).padStart(2, '0');
+    const REG = { H1: [45, 2700], HT: [45, 2700], H2: [90, 5400], ET1: [105, 6300], ET2: [120, 7200] };
+    let mp = REG[c.phase];
+    if (!mp && c.phase === 'FT') mp = sec > 7200 ? [120, 7200] : sec > 6300 ? [105, 6300] : sec > 5400 ? [90, 5400] : null;
+    if (mp && sec > mp[1]) { const ex = sec - mp[1]; return `${mp[0]}+${Math.floor(ex / 60)}:${String(ex % 60).padStart(2, '0')} · ${c.phase}`; }
+    return `${Math.floor(sec / 60)}:${ss} · ${c.phase}`;
   }
 
   _frame(f) {

@@ -11,9 +11,13 @@
 
   const fmtClock = (c) => {
     if (!c) return '—';
-    const m = Math.floor(c.s / 60), sec = String(c.s % 60).padStart(2, '0');
-    const mm = m > 90 && c.phase !== 'FT' ? `90+${m - 90}` : String(m);
-    return `${mm}:${sec}`;
+    // stoppage relative to each phase's regulation boundary (45+n / 90+n / 105+n / 120+n)
+    const sec = c.s | 0, ss = String(sec % 60).padStart(2, '0');
+    const REG = { H1: [45, 2700], HT: [45, 2700], H2: [90, 5400], ET1: [105, 6300], ET2: [120, 7200] };
+    let mp = REG[c.phase];
+    if (!mp && c.phase === 'FT') mp = sec > 7200 ? [120, 7200] : sec > 6300 ? [105, 6300] : sec > 5400 ? [90, 5400] : null;
+    if (mp && sec > mp[1]) { const ex = sec - mp[1]; return `${mp[0]}+${Math.floor(ex / 60)}:${String(ex % 60).padStart(2, '0')}`; }
+    return `${Math.floor(sec / 60)}:${ss}`;
   };
 
   function Flag({ name, w = 22 }) {
@@ -341,7 +345,7 @@
         g.font = '700 104px "Barlow Condensed", sans-serif'; g.fillStyle = '#f0f3ec';
         g.fillText(`${ha}   ${score.home} — ${score.away}   ${aa}`, W / 2, imgH + 208);
         g.fillStyle = '#e8ecdf'; g.font = '500 27px "IBM Plex Mono", monospace';
-        const cl = clock.phase === 'FT' ? 'FULL TIME' : `${Math.floor(clock.s / 60)}:${String(clock.s % 60).padStart(2, '0')} · ${clock.phase}`;
+        const cl = clock.phase === 'FT' ? 'FULL TIME' : `${fmtClock(clock)} · ${clock.phase}`;
         g.fillText(cl, W / 2, imgH + 250);
         // win-probability bar (home | draw | away)
         const bx = 140, bw = W - 280, by = imgH + 282, bh = 20;
