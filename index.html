@@ -65,12 +65,10 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-ra
       </sc-if>
     </div>
 
-    <!-- corner controls: FEED + STATS bottom-left · transport bottom-center · War Room launcher bottom-right -->
+    <!-- corner controls: FEED + STATS bottom-left · transport (play/speed/sound) lives in the console scrubber -->
     <div style="position:fixed; left:12px; bottom: calc(env(safe-area-inset-bottom) + 14px); display:flex; gap:8px; z-index:30;">
       <button onClick="{{ onOpenFeed }}" style="min-height:46px; padding:0 14px; font-family:inherit; font-size:10px; font-weight:700; letter-spacing:2px; border:1px solid rgba(200,210,190,.25); background:rgba(8,12,9,.82); color:#e8ecdf; border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#d3ab48; margin-right:7px; animation:blinkDot 1.6s infinite;"></span>FEED</button>
       <button onClick="{{ onOpenStats }}" style="min-height:46px; padding:0 14px; font-family:inherit; font-size:10px; font-weight:700; letter-spacing:2px; border:1px solid rgba(200,210,190,.25); background:rgba(8,12,9,.82); color:#e8ecdf; border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">STATS</button>
-      <!-- play/speed live in the console scrubber; only the sound toggle sits here -->
-      <button onClick="{{ onToggleSound }}" style="min-height:46px; padding:0 12px; font-family:inherit; font-size:9px; font-weight:700; letter-spacing:1.5px; border:1px solid rgba(200,210,190,.22); background:rgba(8,12,9,.82); color: {{ soundColor }}; border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">{{ soundLabel }}</button>
     </div>
 
     <sc-if value="{{ landscapeHint }}" hint-placeholder-val="{{ false }}">

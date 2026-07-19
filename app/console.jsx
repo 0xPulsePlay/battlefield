@@ -117,18 +117,22 @@
     return (
       <div style={{ position: 'fixed', ...pos, zIndex: 44, pointerEvents: 'auto' }}>
         <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 12, padding: '8px 12px 9px', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => B().togglePlay && B().togglePlay()} style={{ ...btn, fontSize: 12 }}>{snap.playing === false ? '▶' : '❚❚'}</button>
-            <span style={{ flex: '0 0 auto', fontFamily: MONO, fontSize: 12, fontWeight: 700, color: INK, minWidth: 52, fontVariantNumeric: 'tabular-nums' }}>{fmtClock(f && f.clock)}</span>
+            <span style={{ flex: '0 0 auto', fontFamily: MONO, fontSize: 12, fontWeight: 700, color: INK, minWidth: 48, fontVariantNumeric: 'tabular-nums' }}>{fmtClock(f && f.clock)}</span>
             <span style={{ flex: '0 0 auto', fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: DIM }}>{f && f.clock ? f.clock.phase : ''}</span>
             <input type="range" min="0" max="1000" value={Math.round(prog * 1000)} aria-label="Match timeline"
               onPointerDown={() => { wasPlaying.current = snap.playing !== false; B().setPaused && B().setPaused(true); }}
               onChange={(e) => { const p = +e.target.value / 1000; setDrag(p); seek(p); }}
               onPointerUp={() => { setDrag(null); if (wasPlaying.current) B().setPaused && B().setPaused(false); }}
-              style={{ flex: 1, accentColor: GOLD, height: 4, cursor: 'pointer' }} />
+              style={{ flex: 1, minWidth: 0, accentColor: GOLD, height: 4, cursor: 'pointer' }} />
             <button onClick={() => { const nx = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; B().setSpeed && B().setSpeed(nx); }}
               style={{ ...btn, minWidth: 34, width: 'auto', padding: '0 8px', fontSize: 11, fontWeight: 700 }}>{speed}×</button>
-            {isDesktop && <button onClick={() => B().toggleSound && B().toggleSound()} aria-label="Toggle sound" style={{ ...btn, width: 'auto', padding: '0 8px', fontSize: 8.5, fontWeight: 700, color: snap.sound ? GOLD : DIM }}>{snap.sound ? 'SND' : 'MUTE'}</button>}
+            <button onClick={() => B().toggleSound && B().toggleSound()} aria-label={snap.sound ? 'Mute sound' : 'Unmute sound'} title={snap.sound ? 'Sound on' : 'Muted'} style={{ ...btn, width: 30, padding: 0, display: 'grid', placeItems: 'center', color: snap.sound ? GOLD : DIM }}>
+              {snap.sound
+                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M15.5 8.5a5 5 0 010 7M19 5a9 9 0 010 14" /></svg>
+                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M22 9l-6 6M16 9l6 6" /></svg>}
+            </button>
           </div>
         </div>
       </div>
@@ -758,19 +762,22 @@
   function CampaignHUD({ side, onPickSide }) {
     const snap = useSnap();
     const isDesktop = useIsDesktop();
+    const narrow = useNarrow(384); // drop the PTS/FOR words so the row clears FEED/STATS at 360
     const [rec, setRec] = useState(loadRecord);
     useEffect(() => { const on = (e) => setRec(e.detail || loadRecord()); window.addEventListener('bf-record', on); return () => window.removeEventListener('bf-record', on); }, []);
     if (snap.mode === 'sandbox' || snap.mode === 'synthetic') return null;
     const id = snap.ident || {};
     const sideName = side === 'home' ? (id.homeAbbr || 'HOME') : side === 'away' ? (id.awayAbbr || 'AWAY') : null;
     const sideCol = side === 'home' ? '#e88a8a' : side === 'away' ? '#7ab5e8' : GOLD;
+    const compact = narrow && !isDesktop;
     const pos = isDesktop ? { right: 20, top: '27%' } : { right: 12, bottom: 'calc(env(safe-area-inset-bottom) + 14px)' };
+    // one row, equal heights (H2): points card + "for <team>" chip side by side.
     return (
-      <div style={{ position: 'fixed', ...pos, zIndex: 43, pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 10, border: `1px solid ${LINE}`, background: PANEL, WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
+      <div style={{ position: 'fixed', ...pos, zIndex: 43, pointerEvents: 'auto', display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: 6, alignItems: 'stretch' }}>
+        <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 10, border: `1px solid ${LINE}`, background: PANEL, WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinejoin="round"><path d="M12 2l3 6 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 9l6-1z" /></svg>
           <span style={{ fontFamily: COND, fontSize: 19, fontWeight: 700, color: '#f0f3ec', lineHeight: 1 }}>{rec.pts}</span>
-          <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1.5, color: DIM }}>PTS</span>
+          {!compact && <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1.5, color: DIM }}>PTS</span>}
           {rec.streak >= 2 && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 1 }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill={GOLD}><path d="M12 2c1 3 4 4 4 8a4 4 0 01-8 0c0-1 .5-2 1-2.5C9 8 12 6 12 2z" /></svg>
@@ -778,8 +785,8 @@
             </span>
           )}
         </div>
-        <button onClick={onPickSide} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 8, border: `1px solid ${LINE}`, background: PANEL, cursor: 'pointer', WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
-          <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1, color: DIM }}>FOR</span>
+        <button onClick={onPickSide} style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 10, border: `1px solid ${LINE}`, background: PANEL, cursor: 'pointer', WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' }}>
+          {compact ? <span style={{ width: 6, height: 6, borderRadius: '50%', background: sideName ? sideCol : GOLD }} /> : <span style={{ fontFamily: MONO, fontSize: 7.5, letterSpacing: 1, color: DIM }}>FOR</span>}
           {sideName ? <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: sideCol }}>{sideName}</span> : <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: GOLD }}>PICK ›</span>}
         </button>
       </div>
@@ -850,6 +857,7 @@
   // responds to a long-press (desktop: click the FRONT chip).
   function InspectHotspots({ onInspect, mode }) {
     const snap = useSnap();
+    const isDesktop = useIsDesktop();
     const f = snap.frame;
     const openFront = useCallback(() => { const fr = B().getFrame && B().getFrame(); if (!fr) return; onInspect({ kind: 'frontline', prob: fr.prob, front: fr.front, ts: B().headTs ? B().headTs() : 0 }); }, [onInspect]);
     const openFog = useCallback(() => {
@@ -877,10 +885,13 @@
     const ha = (snap.ident && snap.ident.homeAbbr) || 'HOME', aa = (snap.ident && snap.ident.awayAbbr) || 'AWAY';
     const flareTop = flare ? (flare.side === 'home' ? '64%' : flare.side === 'away' ? '29%' : '46%') : null;
     const chip = { position: 'fixed', zIndex: 43, pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: MONO, fontWeight: 700, WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)' };
+    // H1: sit the tab just ABOVE the scrub bar, left edge aligned with it (desktop the
+    // scrubber is docked at left:384; mobile it spans left:12).
+    const frontPos = isDesktop ? { left: 384, bottom: 72 } : { left: 12, bottom: 'calc(env(safe-area-inset-bottom) + 125px)' };
     return (
       <React.Fragment>
         {!suspended && (
-          <button onClick={openFront} aria-label="Inspect the frontline odds (de-margined 1X2)" style={{ ...chip, flexDirection: 'column', alignItems: 'flex-start', gap: 1, left: 10, top: '47%', transform: 'translateY(-50%)', padding: '6px 9px', borderRadius: 9, border: `1px solid ${LINE}`, background: PANEL, color: INK }}>
+          <button onClick={openFront} aria-label="Inspect the frontline odds (de-margined 1X2)" style={{ ...chip, ...frontPos, flexDirection: 'column', alignItems: 'flex-start', gap: 1, padding: '6px 9px', borderRadius: 9, border: `1px solid ${LINE}`, background: PANEL, color: INK }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 7.5, fontWeight: 700, letterSpacing: 1, color: DIM }}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8fc4ec" strokeWidth="2"><circle cx="12" cy="12" r="8" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>
               FRONTLINE ODDS

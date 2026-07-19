@@ -8,6 +8,15 @@ Run: `npm run dev` (→ :4400) · rooms: `npm run rooms` (→ :4490) · tests: `
 
 ---
 
+# ROUND 3 — §H two layout nits (2026-07-19, after 2e9188e)
+
+| ID | Acceptance criterion | Status |
+|---|---|---|
+| H1 | FRONTLINE ODDS tab sits directly above the scrubber, edges aligned, no overlap — at 402×874 and 1440×900 | **PASS** — tab repositioned above the scrub bar, left edge aligned with the scrubber (mobile left:12; desktop left:384 = docked scrubber's left). Playwright: tab bottom ≤ scrubber top (5–6px gap), left-aligned, 0 errors at both widths. |
+| H2 | Points card + "for <team>" chip render as one equal-height row (not stacked) at 360/402/430 + desktop; no wrap/overlap | **PASS** — CampaignHUD is now a `row` with `align-items:stretch` (both chips 33px). To clear FEED/STATS at 360 the labels compact under 384px (drops "PTS"/"FOR", keeps icons) and the SND toggle moved into the scrubber as an icon (seek gets `min-width:0` so the bar never overflows). Playwright: same-top/same-height/side-by-side at all widths, no FEED/STATS overlap, 0 errors. |
+
+---
+
 # ROUND 2 — §G polish (mobile composition + room usernames, 2026-07-19)
 
 | ID | Acceptance criterion | Status |
