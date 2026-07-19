@@ -493,48 +493,90 @@
     );
   }
 
-  // ── wallet sheet (devnet, clearly labelled) ───────────────────────────────
-  function WalletSheet({ onClose, onConnect, wallet }) {
+  // ── wallet: real Phantom (window.phantom.solana), guest fallback ──────────
+  function getPhantom() {
+    try { return (window.phantom && window.phantom.solana) || (window.solana && window.solana.isPhantom ? window.solana : null); } catch { return null; }
+  }
+  const RANKS = [[400, 'GENERAL'], [150, 'CAPTAIN'], [50, 'SERGEANT'], [1, 'SOLDIER']];
+  function rankFor(pts) { for (const [th, r] of RANKS) if (pts >= th) return r; return 'RECRUIT'; }
+
+  function WalletSheet({ onClose, onConnect, wallet, walletKind }) {
     const rec = loadRecord();
     const acc = rec.made ? Math.round((rec.correct / rec.made) * 100) : 0;
-    const connect = () => {
-      // devnet demo: a deterministic ed25519-style pubkey stand-in (no real signing here).
-      const bytes = Array.from({ length: 32 }, () => (Math.random() * 256) | 0);
-      const b58 = base58(bytes);
-      onConnect(b58);
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState(null);
+    const phantom = getPhantom();
+    const connectPhantom = async () => {
+      const prov = getPhantom(); if (!prov) return;
+      setBusy(true); setErr(null);
+      try {
+        const resp = await prov.connect();
+        const pubkey = ((resp && resp.publicKey) ? resp.publicKey : prov.publicKey).toString();
+        // sign-in-with-Solana: the wallet signs a challenge (no funds, no gas).
+        const nonce = Math.random().toString(36).slice(2, 10);
+        const msg = `The Probability Battlefield — enlist\nWallet: ${pubkey}\nDevnet · no funds move · nonce ${nonce}`;
+        await prov.signMessage(new TextEncoder().encode(msg), 'utf8');
+        onConnect(pubkey, 'phantom');
+      } catch (e) {
+        setErr((e && (e.code === 4001 || /reject|declin/i.test(e.message || ''))) ? 'Enlistment declined' : 'Could not connect Phantom');
+      } finally { setBusy(false); }
     };
-    const RecordPanel = () => (
-      <div style={{ margin: '14px 0 4px', padding: '12px 14px', border: `1px solid ${LINE}`, borderRadius: 12, background: 'rgba(255,255,255,.03)' }}>
-        <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: 2, color: DIM, marginBottom: 10 }}>PREDICT-ALONG RECORD</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'center' }}>
-          {[['CALLS', rec.made], ['RIGHT', `${rec.correct} · ${acc}%`], ['POINTS', rec.pts]].map(([k, v]) => (
+    const guest = () => { const bytes = Array.from({ length: 32 }, () => (Math.random() * 256) | 0); onConnect(base58(bytes), 'guest'); };
+
+    const Card = ({ children }) => <div style={{ width: '100%', boxSizing: 'border-box', padding: '13px 14px', border: `1px solid ${LINE}`, borderRadius: 12, background: 'rgba(255,255,255,.03)', textAlign: 'center' }}>{children}</div>;
+    const Record = () => (
+      <Card>
+        <div style={{ fontFamily: COND, fontSize: 22, fontWeight: 700, letterSpacing: 2, color: '#c9b6f0' }}>{rankFor(rec.pts)}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+          {[['CALLS', rec.made], ['ACCURACY', `${acc}%`], ['POINTS', rec.pts]].map(([k, v]) => (
             <div key={k} style={{ flex: 1 }}>
-              <div style={{ fontFamily: COND, fontSize: 26, fontWeight: 700, color: k === 'POINTS' ? GOLD : '#f0f3ec' }}>{v}</div>
-              <div style={{ fontSize: 8.5, letterSpacing: 1.5, color: DIM }}>{k}</div>
+              <div style={{ fontFamily: COND, fontSize: 24, fontWeight: 700, color: k === 'POINTS' ? GOLD : '#f0f3ec' }}>{v}</div>
+              <div style={{ fontSize: 8, letterSpacing: 1.2, color: DIM }}>{k}</div>
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 8.5, letterSpacing: 1, color: 'rgba(210,220,205,.35)', marginTop: 10 }}>SCORED VS THE IMPLIED GOAL CHANCE · THIS DEVICE</div>
+      </Card>
+    );
+    const Badge = () => (
+      <div style={{ display: 'inline-flex', gap: 5, alignItems: 'center', fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: 1.5, color: '#c9b6f0', border: '1px solid rgba(155,125,232,.4)', background: 'rgba(155,125,232,.12)', padding: '4px 9px', borderRadius: 20, marginBottom: 14 }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#c9b6f0' }} />DEVNET · NO REAL FUNDS
       </div>
     );
+    const btn = (bg, color) => ({ width: '100%', boxSizing: 'border-box', padding: 13, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color, background: bg, border: bg.startsWith('rgba') ? `1px solid ${LINE}` : 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 });
+    const phantomMark = <svg width="15" height="15" viewBox="0 0 128 128" fill="currentColor"><path d="M110 64c0 25.4-20.6 46-46 46-20 0-37-12.8-43.3-30.6-.3-.9.6-1.7 1.5-1.3 3 1.3 6.3 2 9.8 2 8 0 13-4.7 13-12.3V56c0-9.4 7.6-17 17-17s17 7.6 17 17v2c0 2.2 1.8 4 4 4s4-1.8 4-4v-2c0-3 2.4-5.4 5.4-5.4S102 51 102 54v10z"/></svg>;
+
     return (
-      <Sheet title="GUEST IDENTITY" onClose={onClose} accent="#9b7de8">
-        <div style={{ display: 'inline-flex', alignSelf: 'flex-start', gap: 6, alignItems: 'center', fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: '#c9b6f0', border: '1px solid rgba(155,125,232,.4)', background: 'rgba(155,125,232,.12)', padding: '4px 9px', borderRadius: 6, marginBottom: 12 }}>◆ DEVNET LABEL · NO REAL FUNDS · WALLET CONNECT PLANNED</div>
-        {!wallet ? (
-          <div>
-            <Muted>Create a local guest identity to save your predict-along record and climb the leaderboard. Real Solana wallet connect (Phantom / Backpack) is planned. The on-chain substance here is the <b style={{ color: INK }}>Merkle proof walk</b> — every tick is verified against the Solana oracle, no wallet needed.</Muted>
-            <button onClick={connect} style={{ width: '100%', padding: 13, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: '#fff', background: 'linear-gradient(90deg,#7d4fe0,#9b7de8)', border: 'none', borderRadius: 10, cursor: 'pointer' }}>CREATE GUEST ID (DEVNET)</button>
-            <RecordPanel />
-          </div>
-        ) : (
-          <div>
-            <Row k="Identity" v="Guest (devnet label)" />
-            <Row k="Address" v={wallet.slice(0, 8) + '…' + wallet.slice(-6)} />
-            <Row k="Wallet connect" v="Planned" />
-            <RecordPanel />
-            <button onClick={() => onConnect(null)} style={{ width: '100%', marginTop: 8, padding: 12, fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: INK, background: 'rgba(255,255,255,.05)', border: `1px solid ${LINE}`, borderRadius: 10, cursor: 'pointer' }}>CLEAR GUEST ID</button>
-          </div>
-        )}
+      <Sheet title={wallet ? (walletKind === 'phantom' ? 'YOUR COMMISSION' : 'GUEST COMMISSION') : 'ENLIST'} onClose={onClose} accent="#9b7de8">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', overflowY: 'auto', padding: '2px 2px 4px' }}>
+          <Badge />
+          {!wallet ? (
+            <React.Fragment>
+              <div style={{ fontFamily: COND, fontSize: 19, fontWeight: 700, letterSpacing: 1, color: '#f0f3ec' }}>JOIN THE CAMPAIGN</div>
+              <div style={{ fontSize: 10.5, color: DIM, margin: '4px 0 16px', maxWidth: 280, lineHeight: 1.45 }}>Sign in with Solana to save your rank.</div>
+              {phantom ? (
+                <button onClick={connectPhantom} disabled={busy} style={btn('linear-gradient(90deg,#7d4fe0,#9b7de8)', '#fff')}>{phantomMark}{busy ? 'CHECK PHANTOM…' : 'CONNECT PHANTOM'}</button>
+              ) : (
+                <a href="https://phantom.app/download" target="_blank" rel="noopener" style={{ width: '100%', textDecoration: 'none' }}>
+                  <button style={btn('linear-gradient(90deg,#7d4fe0,#9b7de8)', '#fff')}>{phantomMark}GET PHANTOM</button>
+                </a>
+              )}
+              {err && <div style={{ fontSize: 10, color: '#e88a8a', marginTop: 8 }}>{err}</div>}
+              <button onClick={guest} style={{ marginTop: 10, background: 'none', border: 'none', color: DIM, fontFamily: MONO, fontSize: 10, letterSpacing: 1, cursor: 'pointer', textDecoration: 'underline' }}>or continue as guest</button>
+              <div style={{ height: 14 }} />
+              <Record />
+            </React.Fragment>
+          ) : (
+            <React.Fragment>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: walletKind === 'phantom' ? '#7ed992' : DIM, marginBottom: 10 }}>
+                {walletKind === 'phantom' ? <React.Fragment>{phantomMark}PHANTOM · SIGNED IN</React.Fragment> : 'GUEST IDENTITY'}
+              </div>
+              <div style={{ fontFamily: MONO, fontSize: 13, color: INK, letterSpacing: .5 }}>{wallet.slice(0, 4)}…{wallet.slice(-4)}</div>
+              <div style={{ height: 14 }} />
+              <Record />
+              <button onClick={() => onConnect(null)} style={{ ...btn('rgba(255,255,255,.05)', INK), marginTop: 12 }}>{walletKind === 'phantom' ? 'DISCONNECT' : 'CLEAR GUEST ID'}</button>
+            </React.Fragment>
+          )}
+        </div>
       </Sheet>
     );
   }
@@ -695,6 +737,7 @@
     const [sheet, setSheet] = useState(null);
     const [inspectSubject, setInspectSubject] = useState(null);
     const [wallet, setWallet] = useState(() => { try { return localStorage.getItem('bf_wallet') || null; } catch { return null; } });
+    const [walletKind, setWalletKind] = useState(() => { try { return localStorage.getItem('bf_wallet_kind') || 'guest'; } catch { return 'guest'; } });
     const [mode, setMode] = useState('replay');
     const openInspect = useCallback((subject) => { setInspectSubject(subject); setSheet('inspect'); B().setPaused && B().setPaused(true); }, []);
     useEffect(() => {
@@ -717,7 +760,13 @@
       return () => window.removeEventListener('keydown', onKey);
     }, []);
     if (!ready) return null;
-    const connect = (w) => { setWallet(w); try { w ? localStorage.setItem('bf_wallet', w) : localStorage.removeItem('bf_wallet'); } catch {} };
+    const connect = (w, kind = 'guest') => {
+      setWallet(w); setWalletKind(kind);
+      try {
+        if (w) { localStorage.setItem('bf_wallet', w); localStorage.setItem('bf_wallet_kind', kind); }
+        else { localStorage.removeItem('bf_wallet'); localStorage.removeItem('bf_wallet_kind'); }
+      } catch {}
+    };
     return (
       <React.Fragment>
         <TopChrome onOpen={openSheet} mode={mode} wallet={wallet} />
@@ -727,7 +776,7 @@
         {sheet === 'picker' && <FixturePicker onClose={() => setSheet(null)} />}
         {sheet === 'inspect' && <InspectSheet subject={inspectSubject} onClose={() => setSheet(null)} />}
         {sheet === 'share' && <ShareSheet onClose={() => setSheet(null)} />}
-        {sheet === 'wallet' && <WalletSheet onClose={() => setSheet(null)} onConnect={connect} wallet={wallet} />}
+        {sheet === 'wallet' && <WalletSheet onClose={() => setSheet(null)} onConnect={connect} wallet={wallet} walletKind={walletKind} />}
       </React.Fragment>
     );
   }
