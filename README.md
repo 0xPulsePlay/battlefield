@@ -1,5 +1,16 @@
 # The Probability Battlefield
 
+<img src="docs/result.png" alt="The front held. Battlefield finished 3rd of 285." width="100%">
+
+| | |
+| --- | --- |
+| Theatre | Consumer and Fan Experiences |
+| Order | 3rd of 285 |
+| Date | 31 July 2026 |
+| Status | Held |
+| Dispatch | [TxODDS announcement](https://x.com/TXODDSOfficial/status/2083192358279995510) |
+| Track | [Consumer and Fan Experiences](https://superteam.fun/earn/listing/consumer-and-fan-experiences) |
+
 A World Cup match rendered as a war between two national armies on a floating acre of land — an
 isometric diorama with a cut-earth skirt on its edges. Army sizes are live de-margined win
 probabilities, the frontline is pushed by possession-danger data, match events fire war

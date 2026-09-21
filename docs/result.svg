@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img">
+  <title>The front held. Battlefield finished 3rd of 285.</title>
+  <rect width="1280" height="640" fill="#070b08"/>
+  <rect width="1280" height="6" fill="#d3ab48"/>
+  <text x="72" y="74" fill="#f0f3ec" font-family="Barlow Condensed, 'Arial Narrow', Futura, sans-serif" font-size="34" font-weight="700" letter-spacing="3.2">BATTLEFIELD</text>
+  <text x="1208" y="70" text-anchor="end" fill="#9aa394" font-family="Barlow Condensed, 'Arial Narrow', Futura, sans-serif" font-size="18" letter-spacing="1.2">Consumer and Fan Experiences</text>
+  <line x1="72" y1="98" x2="1208" y2="98" stroke="#243028" stroke-width="1"/>
+  <rect x="72" y="118" width="1136" height="268" fill="#101810" stroke="#243028" stroke-width="1"/>
+  <line x1="96" y1="372" x2="1184" y2="372" stroke="#243028" stroke-width="1"/>
+  <text x="96" y="210" fill="#d3ab48" font-family="Barlow Condensed, 'Arial Narrow', Futura, sans-serif" font-size="18" font-weight="700" letter-spacing="1.6">3RD</text>
+  <line x1="156" y1="214" x2="1184" y2="214" stroke="#c5cec0" stroke-width="1.25" stroke-dasharray="5 6"/>
+  <path d="M 128 340 C 138.3 336.3 169.7 319.3 190 318 C 210.3 316.7 228.3 335.0 250 332 C 271.7 329.0 296.7 302.7 320 300 C 343.3 297.3 366.7 319.7 390 316 C 413.3 312.3 436.7 281.7 460 278 C 483.3 274.3 506.7 298.3 530 294 C 553.3 289.7 576.7 256.3 600 252 C 623.3 247.7 646.7 272.0 670 268 C 693.3 264.0 718.3 232.7 740 228 C 761.7 223.3 780.0 242.3 800 240 C 820.0 237.7 836.7 219.0 860 214 C 883.3 209.0 913.3 209.3 940 210 C 966.7 210.7 993.3 218.3 1020 218 C 1046.7 217.7 1072.7 208.7 1100 208 C 1127.3 207.3 1170.0 213.0 1184 214" fill="none" stroke="#5c4a22" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,7)"/>
+  <path d="M 128 340 C 138.3 336.3 169.7 319.3 190 318 C 210.3 316.7 228.3 335.0 250 332 C 271.7 329.0 296.7 302.7 320 300 C 343.3 297.3 366.7 319.7 390 316 C 413.3 312.3 436.7 281.7 460 278 C 483.3 274.3 506.7 298.3 530 294 C 553.3 289.7 576.7 256.3 600 252 C 623.3 247.7 646.7 272.0 670 268 C 693.3 264.0 718.3 232.7 740 228 C 761.7 223.3 780.0 242.3 800 240 C 820.0 237.7 836.7 219.0 860 214 C 883.3 209.0 913.3 209.3 940 210 C 966.7 210.7 993.3 218.3 1020 218 C 1046.7 217.7 1072.7 208.7 1100 208 C 1127.3 207.3 1170.0 213.0 1184 214" fill="none" stroke="#d3ab48" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="860" y1="214" x2="860" y2="372" stroke="#d3ab48" stroke-width="1"/>
+  <circle cx="860" cy="214" r="7" fill="#101810" stroke="#d3ab48" stroke-width="2.5"/>
+  <circle cx="860" cy="214" r="3.5" fill="#d3ab48"/>
+  <text x="72" y="480" fill="#d3ab48" font-family="Barlow Condensed, 'Arial Narrow', Futura, sans-serif" font-size="68" font-weight="700" letter-spacing="1.4">3RD</text>
+  <text x="72" y="510" fill="#9aa394" font-family="Barlow Condensed, 'Arial Narrow', Futura, sans-serif" font-size="16" letter-spacing="2.4">HELD</text>
+  <text x="456" y="478" fill="#e2e7dc" font-family="IBM Plex Mono, 'SF Mono', Menlo, ui-monospace, monospace" font-size="44" font-weight="600">285</text>
+  <text x="456" y="510" fill="#9aa394" font-family="Barlow Condensed, 'Arial Narrow', Futura, sans-serif" font-size="16" letter-spacing="2.4">SUBMISSIONS</text>
+  <text x="840" y="478" fill="#e2e7dc" font-family="IBM Plex Mono, 'SF Mono', Menlo, ui-monospace, monospace" font-size="36" font-weight="600">31 Jul 2026</text>
+  <text x="840" y="510" fill="#9aa394" font-family="Barlow Condensed, 'Arial Narrow', Futura, sans-serif" font-size="16" letter-spacing="2.4">ANNOUNCED</text>
+  <text x="72" y="584" fill="#9aa394" font-family="Barlow Condensed, 'Arial Narrow', Futura, sans-serif" font-size="16" letter-spacing="1.2">TxODDS · Solana · Superteam</text>
+</svg>
