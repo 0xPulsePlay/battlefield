@@ -1,6 +1,6 @@
 # The Probability Battlefield
 
-> **3rd of 285** in the [TxODDS World Cup hackathon](https://superteam.fun/earn/hackathon/world-cup), Consumer and Fan Experiences.
+**3rd place out of 285** in the [TxODDS World Cup hackathon](https://superteam.fun/earn/hackathon/world-cup), Consumer and Fan Experiences.
 
 A World Cup match rendered as a war between two national armies on a floating acre of land — an
 isometric diorama with a cut-earth skirt on its edges. Army sizes are live de-margined win
